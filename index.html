@@ -84,6 +84,26 @@
   table.calc th:first-child, table.calc td:first-child { text-align: left; padding-left: 0; }
   table.calc td input { width: 72px; text-align: right; padding: 5px 7px; }
   .delta-up { color: var(--danger); font-size: 12.5px; display: block; }
+  #scenOut tbody tr { cursor: pointer; }
+  #scenOut tbody tr[aria-selected=true] td { background: #f1f3f6; }
+  #scenOut tbody tr td:first-child { padding-left: 8px; border-left: 3px solid transparent; }
+  #scenOut tbody tr[aria-selected=true] td:first-child { border-left-color: var(--ink); }
+  #scenOut th:first-child { padding-left: 11px; }
+  #scenOut td:last-child, #scenOut th:last-child { padding-right: 6px; }
+  #whOrders td input { width: 78px; }
+  #whOrders .nm { display: flex; align-items: center; gap: 7px; font-weight: 600; }
+  #whOrders .sub { font-size: 12.5px; color: var(--muted); font-weight: 400; display: block; }
+  #zoneInputs td input { width: 58px; }
+  .cost-row { display: grid; grid-template-columns: 1fr 78px 104px 26px; gap: 6px; align-items: center; padding: 4px 0; }
+  .cost-row input, .cost-row select { width: 100%; min-width: 0; }
+  .cost-row input[type=number] { text-align: right; }
+  .cost-row select { font: inherit; padding: 7px 4px; border: 1px solid #cdd2d9; border-radius: 6px; background: #fff; color: var(--ink); }
+  .cost-row .x { background: none; color: var(--muted); padding: 0; font-size: 18px; line-height: 1; }
+  .cost-row .x:hover { color: var(--danger); }
+  #breakdown td.bar-cell { width: 34%; padding-left: 10px; }
+  #breakdown .bar { height: 8px; border-radius: 2px; background: var(--ink); min-width: 1px; }
+  #breakdown tr.total td { font-weight: 700; border-top: 2px solid var(--ink); }
+  #breakdown tr.minus td { color: #17803d; }
   details.more { margin-top: 8px; font-size: 13px; }
   details.more summary { cursor: pointer; color: var(--link); }
   .hint a { color: var(--link); }
@@ -208,38 +228,50 @@
 
   <section class="tab" id="tabCost" role="tabpanel" aria-labelledby="tabBtnCost" hidden>
     <div id="calcResult">
-      <h2>方案比較</h2>
+      <h2>開放範圍比較</h2>
       <table class="calc" id="scenOut"></table>
-      <details class="more">
-        <summary>各分區的單均里程、成本、工時</summary>
-        <table class="calc" id="zoneOut" style="margin-top:6px"></table>
-        <p class="hint">平均距離以面積計算，每一小格視為等量訂單。山區與延伸區的住戶多半住在靠市區的一側，實際距離可能較短。</p>
-      </details>
+      <p class="hint" id="scenHint">點一列可以切換下方明細要看哪個方案。</p>
     </div>
 
-    <h2>各分區的單量與配送條件</h2>
+    <h2>各倉單量</h2>
+    <table class="calc" id="whOrders"></table>
+    <p class="hint">每日單量填的是該倉在標準區的單量。延伸區和山區的單量由下方的「單量密度」推算，會顯示在倉名下方。</p>
+
+    <h2>成本項目</h2>
+    <div id="costItems"></div>
+    <div class="add-actions" style="margin-top:8px">
+      <button type="button" class="ghost" id="costAdd">新增成本項目</button>
+      <button type="button" class="ghost" id="costReset">還原預設</button>
+    </div>
+    <details class="more">
+      <summary>各種計費單位怎麼算</summary>
+      <p class="hint">每單：乘上單量。每趟：乘上趟數，趟數是單量除以每趟併單數。每公里：只算超過「內含里程」的部分，乘上趟數。每外送工時：來回車程加上交付停留的總時數。每倉每日：乘上有勾選的門市倉數量。每月：除以 30 換算成每日。</p>
+    </details>
+
+    <h2>各分區的配送條件</h2>
     <table class="calc" id="zoneInputs">
-      <thead><tr><th>分區</th><th>每日單量</th><th>路線係數</th><th>每趟併單</th></tr></thead>
+      <thead><tr><th>分區</th><th>單量密度 %</th><th>路線係數</th><th>每趟併單</th><th>運費收入</th></tr></thead>
       <tbody>
-        <tr><td>標準區</td><td><input type="number" id="oA" value="1000" min="0" step="10" aria-label="標準區每日單量"></td><td><input type="number" id="fA" value="1.3" min="1" step="0.1" aria-label="標準區路線係數"></td><td><input type="number" id="bA" value="1" min="1" step="0.5" aria-label="標準區每趟併單數"></td></tr>
-        <tr><td>延伸區</td><td><input type="number" id="oB" value="30" min="0" step="5" aria-label="延伸區每日單量"></td><td><input type="number" id="fB" value="1.6" min="1" step="0.1" aria-label="延伸區路線係數"></td><td><input type="number" id="bB" value="1" min="1" step="0.5" aria-label="延伸區每趟併單數"></td></tr>
-        <tr><td>山區</td><td><input type="number" id="oC" value="10" min="0" step="5" aria-label="山區每日單量"></td><td><input type="number" id="fC" value="1.8" min="1" step="0.1" aria-label="山區路線係數"></td><td><input type="number" id="bC" value="1" min="1" step="0.5" aria-label="山區每趟併單數"></td></tr>
+        <tr><td>標準區</td><td class="meta">基準</td><td><input type="number" id="fA" min="1" step="0.1" aria-label="標準區路線係數"></td><td><input type="number" id="bA" min="1" step="0.5" aria-label="標準區每趟併單數"></td><td><input type="number" id="rA" min="0" step="5" aria-label="標準區每單運費收入"></td></tr>
+        <tr><td>延伸區</td><td><input type="number" id="dB" min="0" step="1" aria-label="延伸區單量密度百分比"></td><td><input type="number" id="fB" min="1" step="0.1" aria-label="延伸區路線係數"></td><td><input type="number" id="bB" min="1" step="0.5" aria-label="延伸區每趟併單數"></td><td><input type="number" id="rB" min="0" step="5" aria-label="延伸區每單運費收入"></td></tr>
+        <tr><td>山區</td><td><input type="number" id="dC" min="0" step="1" aria-label="山區單量密度百分比"></td><td><input type="number" id="fC" min="1" step="0.1" aria-label="山區路線係數"></td><td><input type="number" id="bC" min="1" step="0.5" aria-label="山區每趟併單數"></td><td><input type="number" id="rC" min="0" step="5" aria-label="山區每單運費收入"></td></tr>
       </tbody>
     </table>
-    <p class="hint">路線係數是實際里程相對直線距離的倍數。每趟併單是一趟送幾張單，預約單可以填大於 1。</p>
+    <p class="hint">單量密度：同樣一平方公里，這一區的單量是標準區的百分之幾。路線係數：實際里程是直線距離的幾倍。運費收入：每單向消費者收的運費（元），用來算淨成本。</p>
 
-    <h2>計價方式</h2>
-    <div class="fields">
-      <label>每趟基本費（元）<input type="number" id="cBase" value="60" min="0" step="1"></label>
-      <label>基本費內含里程（公里）<input type="number" id="cIncl" value="2" min="0" step="0.5"></label>
-      <label>超過後每公里加收（元）<input type="number" id="cPerKm" value="10" min="0" step="1"></label>
-      <label>外送平均時速（公里／小時）<input type="number" id="cSpeed" value="25" min="1" step="1"></label>
-      <label>每單交付停留（分鐘）<input type="number" id="cStop" value="5" min="0" step="1"></label>
-      <label class="wide"><input type="checkbox" id="cReturn"> 回程里程也計費</label>
+    <div class="fields" style="margin-top:14px">
+      <label>里程費的內含里程（公里）<input type="number" id="cIncl" min="0" step="0.5"></label>
+      <label>外送平均時速（公里／小時）<input type="number" id="cSpeed" min="1" step="1"></label>
+      <label>每單交付停留（分鐘）<input type="number" id="cStop" min="0" step="1"></label>
+      <label class="wide"><input type="checkbox" id="cReturn"> 回程里程也計入里程費</label>
     </div>
-    <div class="assume">預設值都是示範用的假設，不是實際費率或單量，請換成你們的數字。</div>
+
+    <h2>成本組成：<span id="bdTitle"></span></h2>
+    <table class="calc" id="breakdown"></table>
+
+    <div class="assume">預設的金額、單量與密度都是示範用的假設，請換成你們的數字。這一頁填的內容會記在這個瀏覽器。距離以面積平均計算，每一小格視為等量訂單，而且只計算台北市內的範圍。</div>
   </section>
-</aside>
+</aside></aside>
 
 <div id="mapWrap">
   <div id="map"></div>
@@ -336,20 +368,22 @@
 // 門市倉清單由使用者自行新增，存在這台電腦的瀏覽器裡（不寫進檔案）。
 // 每一筆：{ name 名稱, addr 地址或座標文字, lat, lng, color, visible }
 var WH_STORE = "coverage_warehouses";
+var DEFAULT_ORDERS = 200;      // 新增門市倉時帶入的示範單量，請使用者自行修改
 var PALETTE = ["#2563eb", "#d97706", "#059669", "#c026d3", "#dc2626", "#0891b2", "#7c2d12", "#4f46e5", "#be185d", "#4d7c0f"];
 var WAREHOUSES = (function () {
   try {
     var raw = JSON.parse(localStorage.getItem(WH_STORE) || "[]");
     return raw.filter(function (w) { return w && isFinite(w.lat) && isFinite(w.lng); }).map(function (w) {
       return { name: String(w.name || "門市倉"), addr: String(w.addr || ""), lat: +w.lat, lng: +w.lng,
-               color: w.color || PALETTE[0], visible: w.visible !== false };
+               color: w.color || PALETTE[0], visible: w.visible !== false,
+               orders: isFinite(w.orders) && w.orders >= 0 ? +w.orders : DEFAULT_ORDERS };
     });
   } catch (e) { return []; }
 })();
 function saveWarehouses() {
   try {
     localStorage.setItem(WH_STORE, JSON.stringify(WAREHOUSES.map(function (w) {
-      return { name: w.name, addr: w.addr, lat: w.lat, lng: w.lng, color: w.color, visible: w.visible };
+      return { name: w.name, addr: w.addr, lat: w.lat, lng: w.lng, color: w.color, visible: w.visible, orders: w.orders };
     })));
   } catch (e) {}
 }
@@ -437,7 +471,7 @@ function unmountWarehouse(w) {
 
 function addWarehouse(name, addr, lat, lng, quiet) {
   var w = { name: name || "門市倉 " + (WAREHOUSES.length + 1), addr: addr || "",
-            lat: lat, lng: lng, color: nextColor(), visible: true };
+            lat: lat, lng: lng, color: nextColor(), visible: true, orders: DEFAULT_ORDERS };
   WAREHOUSES.push(w);
   mountWarehouse(w);
   if (!quiet) afterListChange(w);
@@ -451,6 +485,7 @@ function removeWarehouse(w) {
 function afterListChange(focus) {
   saveWarehouses();
   renderList();
+  renderWhOrders();
   recomputeZones();
   refreshResult();
   if (focus && map) map.panTo({ lat: focus.lat, lng: focus.lng });
@@ -476,6 +511,7 @@ function renderList() {
       w.visible = e.target.checked;
       if (w.marker) { w.marker.setVisible(w.visible); w.circle.setVisible(w.visible); }
       saveWarehouses();
+      renderWhOrders();
       recomputeZones();
       refreshResult();
     });
@@ -896,9 +932,10 @@ var GRID = (function () {
   }
   return { lat0: lat1 - rows * dLat, lat1: lat1, lng0: lng0, lng1: lng0 + cols * dLng, dLat: dLat, dLng: dLng,
            rows: rows, cols: cols, mask: mask, cellArea: cellKm * cellKm, kLat: kLat, kLng: kLng,
-           zone: new Uint8Array(rows * cols), dist: new Float32Array(rows * cols) };
+           zone: new Uint8Array(rows * cols), dist: new Float32Array(rows * cols),
+           owner: new Int16Array(rows * cols) };     // owner：這一格由哪個門市倉負責（最近的那個），-1 表示沒有
 })();
-var zoneOverlay = null, zoneStats = null;
+var zoneOverlay = null, zoneStats = null, zoneOwners = [];
 
 function recomputeZones() {
   var g = GRID, ws = WAREHOUSES.filter(function (w) { return w.visible; });
@@ -909,10 +946,12 @@ function recomputeZones() {
       var i = r * g.cols + c, m = g.mask[i];
       if (!m) { g.zone[i] = 0; continue; }
       var lng = g.lng0 + (c + 0.5) * g.dLng, best = Infinity;
+      var own = -1;
       for (var k = 0; k < ws.length; k++) {
         var dy = (lat - ws[k].lat) * g.kLat, dx = (lng - ws[k].lng) * g.kLng, d = Math.sqrt(dx * dx + dy * dy);
-        if (d < best) best = d;
+        if (d < best) { best = d; own = k; }
       }
+      g.owner[i] = own;
       g.dist[i] = best;
       var z = m === 2 ? "C" : (best <= radiusKm ? "A" : "B");
       g.zone[i] = z === "A" ? 1 : z === "B" ? 2 : 3;
@@ -920,6 +959,7 @@ function recomputeZones() {
     }
   }
   zoneStats = ws.length ? st : null;
+  zoneOwners = ws;
   renderLegend();
   renderCalc();
   drawZones();
@@ -953,65 +993,214 @@ function fmt(n, digits) {
   return n.toLocaleString("zh-TW", { minimumFractionDigits: digits || 0, maximumFractionDigits: digits || 0 });
 }
 
+// ───────── 成本試算 ─────────
+// 概念：
+//   1. 每個門市倉負責離它最近的那些格子（它的服務區），服務區再依分區拆成標準／延伸／山區。
+//   2. 使用者填每個倉在標準區的每日單量。延伸區、山區的單量用「單量密度」推算：
+//      該區單量 = 標準區單量 ×（該區面積 ÷ 標準區面積）× 密度百分比。
+//   3. 成本由使用者自訂的項目組成，每個項目選一種計費單位，系統依單量、趟數、里程、工時、倉數去乘。
+var COST_STORE = "coverage_cost_settings";
+var UNITS = [
+  ["order", "元／單"], ["trip", "元／趟"], ["km", "元／公里"], ["hour", "元／外送工時"],
+  ["whday", "元／倉／日"], ["month", "元／月"]
+];
+function defaultCost() {
+  return {
+    items: [
+      { name: "配送基本費", amount: 60, unit: "trip" },
+      { name: "里程加收", amount: 10, unit: "km" },
+      { name: "揀貨與包材", amount: 0, unit: "order" },
+      { name: "倉內人力", amount: 0, unit: "whday" },
+      { name: "系統與平台費", amount: 0, unit: "month" }
+    ],
+    incl: 2, speed: 25, stop: 5, ret: false,
+    zone: { A: { f: 1.3, batch: 1, fee: 0 }, B: { dens: 10, f: 1.6, batch: 1, fee: 0 }, C: { dens: 3, f: 1.8, batch: 1, fee: 0 } }
+  };
+}
+var COST = (function () {
+  var d = defaultCost();
+  try {
+    var s = JSON.parse(localStorage.getItem(COST_STORE) || "null");
+    if (s && Array.isArray(s.items) && s.zone && s.zone.A && s.zone.B && s.zone.C) {
+      s.items = s.items.filter(function (it) { return it && UNITS.some(function (u) { return u[0] === it.unit; }); });
+      return s;
+    }
+  } catch (e) {}
+  return d;
+})();
+function saveCost() { try { localStorage.setItem(COST_STORE, JSON.stringify(COST)); } catch (e) {} }
+
+var SCENARIOS = [["只開標準區", ["A"]], ["加上延伸區", ["A", "B"]], ["全台北市", ["A", "B", "C"]]];
+var scenIndex = 0;
+
+// 把設定值填進輸入欄（載入與還原預設時用）
+function fillCostInputs() {
+  var set = function (id, v) { document.getElementById(id).value = v; };
+  set("cIncl", COST.incl); set("cSpeed", COST.speed); set("cStop", COST.stop);
+  document.getElementById("cReturn").checked = !!COST.ret;
+  set("fA", COST.zone.A.f); set("bA", COST.zone.A.batch); set("rA", COST.zone.A.fee);
+  set("dB", COST.zone.B.dens); set("fB", COST.zone.B.f); set("bB", COST.zone.B.batch); set("rB", COST.zone.B.fee);
+  set("dC", COST.zone.C.dens); set("fC", COST.zone.C.f); set("bC", COST.zone.C.batch); set("rC", COST.zone.C.fee);
+}
+function readCostInputs() {
+  COST.incl = num("cIncl", 0); COST.speed = Math.max(num("cSpeed", 25), 1); COST.stop = num("cStop", 0);
+  COST.ret = document.getElementById("cReturn").checked;
+  COST.zone.A = { f: Math.max(num("fA", 1), 1), batch: Math.max(num("bA", 1), 1), fee: num("rA", 0) };
+  COST.zone.B = { dens: num("dB", 0), f: Math.max(num("fB", 1), 1), batch: Math.max(num("bB", 1), 1), fee: num("rB", 0) };
+  COST.zone.C = { dens: num("dC", 0), f: Math.max(num("fC", 1), 1), batch: Math.max(num("bC", 1), 1), fee: num("rC", 0) };
+}
+
+// 成本項目清單：只在新增、移除、還原時重畫，輸入金額時不重畫，避免游標跳掉
+function renderCostItems() {
+  var box = document.getElementById("costItems");
+  box.innerHTML = "";
+  COST.items.forEach(function (it) {
+    var row = document.createElement("div");
+    row.className = "cost-row";
+    row.innerHTML =
+      '<input type="text" value="' + esc(it.name) + '" aria-label="成本項目名稱" placeholder="項目名稱">' +
+      '<input type="number" value="' + (+it.amount || 0) + '" min="0" step="1" aria-label="' + esc(it.name) + ' 金額">' +
+      '<select aria-label="' + esc(it.name) + ' 計費單位">' + UNITS.map(function (u) {
+        return '<option value="' + u[0] + '"' + (u[0] === it.unit ? " selected" : "") + ">" + u[1] + "</option>";
+      }).join("") + "</select>" +
+      '<button type="button" class="x" aria-label="移除 ' + esc(it.name) + '">×</button>';
+    var els = row.children;
+    els[0].addEventListener("input", function () { it.name = els[0].value; saveCost(); renderCalc(); });
+    els[1].addEventListener("input", function () { var v = parseFloat(els[1].value); it.amount = isFinite(v) && v >= 0 ? v : 0; saveCost(); renderCalc(); });
+    els[2].addEventListener("change", function () { it.unit = els[2].value; saveCost(); renderCalc(); });
+    els[3].addEventListener("click", function () { COST.items.splice(COST.items.indexOf(it), 1); saveCost(); renderCostItems(); renderCalc(); });
+    box.appendChild(row);
+  });
+  if (!COST.items.length) box.innerHTML = '<p class="hint" style="margin:0">還沒有成本項目。</p>';
+}
+
+// 各倉單量表：同樣只在清單變動時重畫，計算結果寫進預留的格子
+function renderWhOrders() {
+  var tbl = document.getElementById("whOrders"), ws = WAREHOUSES.filter(function (w) { return w.visible; });
+  if (!ws.length) { tbl.innerHTML = '<tbody><tr><td class="meta" style="border:0">先在「門市倉」分頁新增並勾選至少一個門市倉。</td></tr></tbody>'; return; }
+  tbl.innerHTML = "<thead><tr><th>門市倉</th><th>標準區每日單量</th><th>方案單量</th><th>單均成本</th></tr></thead>";
+  var body = document.createElement("tbody");
+  ws.forEach(function (w, i) {
+    var tr = document.createElement("tr");
+    tr.innerHTML = '<td><span class="nm"><span class="dot" style="background:' + w.color + '"></span>' + esc(w.name) + "</span>" +
+      '<span class="sub" data-k="sub"></span></td>' +
+      '<td><input type="number" min="0" step="10" value="' + w.orders + '" aria-label="' + esc(w.name) + ' 標準區每日單量"></td>' +
+      '<td data-k="orders"></td><td data-k="unit"></td>';
+    tr.querySelector("input").addEventListener("input", function (e) {
+      var v = parseFloat(e.target.value); w.orders = isFinite(v) && v >= 0 ? v : 0;
+      saveWarehouses(); renderCalc();
+    });
+    w._row = tr;
+    body.appendChild(tr);
+  });
+  tbl.appendChild(body);
+}
+
+// 依目前的分區結果，統計每個倉、每個分區的格數與平均里程等
+function territoryStats() {
+  var g = GRID, keys = [null, "A", "B", "C"], n = zoneOwners.length, T = [];
+  for (var k = 0; k < n; k++) T.push({ A: { n: 0, road: 0, extra: 0, hrs: 0 }, B: { n: 0, road: 0, extra: 0, hrs: 0 }, C: { n: 0, road: 0, extra: 0, hrs: 0 } });
+  for (var i = 0; i < g.zone.length; i++) {
+    var z = keys[g.zone[i]], o = g.owner[i];
+    if (!z || o < 0 || o >= n) continue;
+    var road = g.dist[i] * COST.zone[z].f, t = T[o][z];
+    t.n++; t.road += road;
+    t.extra += Math.max(0, (COST.ret ? road * 2 : road) - COST.incl);   // 每趟要付里程費的公里數
+    t.hrs += road * 2 / COST.speed;                                      // 每趟來回車程（小時）
+  }
+  return T;
+}
+
+// 計算一個方案：回傳總計、各成本項目金額、各倉結果
+function computeScenario(zones, T) {
+  var ws = zoneOwners, res = { orders: 0, hours: 0, revenue: 0, items: COST.items.map(function () { return 0; }), wh: [] };
+  var sum = function (unit) { return COST.items.reduce(function (s, it) { return s + (it.unit === unit ? (+it.amount || 0) : 0); }, 0); };
+  ws.forEach(function (w, k) {
+    var t = T[k], wr = { orders: 0, cost: 0, byZone: {}, noBase: !t.A.n };
+    zones.forEach(function (z) {
+      var tz = t[z];
+      if (!tz.n || !t.A.n) return;
+      var O = z === "A" ? w.orders : w.orders * (tz.n / t.A.n) * (COST.zone[z].dens / 100);
+      if (!(O > 0)) return;
+      var trips = O / COST.zone[z].batch, km = trips * tz.extra / tz.n, hrs = trips * tz.hrs / tz.n + O * COST.stop / 60;
+      wr.byZone[z] = O; wr.orders += O;
+      res.hours += hrs; res.revenue += O * COST.zone[z].fee;
+      COST.items.forEach(function (it, j) {
+        var a = +it.amount || 0, v = it.unit === "order" ? O * a : it.unit === "trip" ? trips * a : it.unit === "km" ? km * a : it.unit === "hour" ? hrs * a : 0;
+        res.items[j] += v; wr.cost += v;
+      });
+    });
+    wr.cost += sum("whday");                       // 每倉每日的固定成本算在各倉自己身上
+    res.orders += wr.orders;
+    res.wh.push(wr);
+  });
+  COST.items.forEach(function (it, j) {
+    var a = +it.amount || 0;
+    if (it.unit === "whday") res.items[j] = a * ws.length;
+    if (it.unit === "month") res.items[j] = a / 30;
+  });
+  res.cost = res.items.reduce(function (s, v) { return s + v; }, 0);
+  return res;
+}
+
 function renderCalc() {
+  var scenTbl = document.getElementById("scenOut"), bd = document.getElementById("breakdown");
+  document.getElementById("bdTitle").textContent = SCENARIOS[scenIndex][0];
   if (!zoneStats) {
-    document.getElementById("scenOut").innerHTML = '<tbody><tr><td class="meta" style="border:0">新增至少一個門市倉後才能試算。</td></tr></tbody>';
-    document.getElementById("zoneOut").innerHTML = "";
+    scenTbl.innerHTML = '<tbody><tr><td class="meta" style="border:0;cursor:default">新增至少一個門市倉後才能試算。</td></tr></tbody>';
+    bd.innerHTML = ""; document.getElementById("scenHint").style.display = "none";
     return;
   }
-  var g = GRID;
-  var base = num("cBase", 0), incl = num("cIncl", 0), perKm = num("cPerKm", 0), speed = Math.max(num("cSpeed", 25), 1), stop = num("cStop", 0);
-  var billReturn = document.getElementById("cReturn").checked;
-  var P = {
-    A: { orders: num("oA", 0), f: Math.max(num("fA", 1), 1), batch: Math.max(num("bA", 1), 1) },
-    B: { orders: num("oB", 0), f: Math.max(num("fB", 1), 1), batch: Math.max(num("bB", 1), 1) },
-    C: { orders: num("oC", 0), f: Math.max(num("fC", 1), 1), batch: Math.max(num("bC", 1), 1) }
-  };
-  // 逐格計算再取平均，避免直接拿平均距離套級距造成的誤差
-  var acc = { A: { n: 0, cost: 0, min: 0, km: 0 }, B: { n: 0, cost: 0, min: 0, km: 0 }, C: { n: 0, cost: 0, min: 0, km: 0 } };
-  var keys = [null, "A", "B", "C"];
-  for (var i = 0; i < g.zone.length; i++) {
-    var z = keys[g.zone[i]];
-    if (!z || !isFinite(g.dist[i])) continue;
-    var p = P[z], road = g.dist[i] * p.f, billKm = billReturn ? road * 2 : road;
-    var trip = base + Math.max(0, billKm - incl) * perKm;
-    acc[z].n++; acc[z].km += road;
-    acc[z].cost += trip / p.batch;
-    acc[z].min += (road * 2 / speed * 60) / p.batch + stop;
-  }
-  var Z = {};
-  ["A", "B", "C"].forEach(function (z) {
-    var a = acc[z];
-    Z[z] = { km: a.n ? a.km / a.n : NaN, cost: a.n ? a.cost / a.n : NaN, min: a.n ? a.min / a.n : NaN, orders: a.n ? P[z].orders : 0 };
-  });
+  document.getElementById("scenHint").style.display = "";
+  readCostInputs();
+  var T = territoryStats(), R = SCENARIOS.map(function (s) { return computeScenario(s[1], T); });
 
-  var h = "<thead><tr><th>分區</th><th>單程里程</th><th>單均成本</th><th>單均工時</th></tr></thead><tbody>";
-  ["A", "B", "C"].forEach(function (z) {
-    h += "<tr><td>" + ZONES[z].name + "</td><td>" + fmt(Z[z].km, 1) + " km</td><td>" +
-         fmt(Z[z].cost, 0) + " 元</td><td>" + fmt(Z[z].min, 0) + " 分</td></tr>";
-  });
-  document.getElementById("zoneOut").innerHTML = h + "</tbody>";
-
-  var scen = [["只開標準區", ["A"]], ["加上延伸區", ["A", "B"]], ["全台北市", ["A", "B", "C"]]];
-  var baseCost = null, baseHours = null;
-  h = "<thead><tr><th>開放範圍</th><th>單均成本</th><th>每日成本</th><th>每日工時</th></tr></thead><tbody>";
-  scen.forEach(function (s) {
-    var orders = 0, cost = 0, mins = 0;
-    s[1].forEach(function (z) {
-      if (!Z[z].orders || !isFinite(Z[z].cost)) return;
-      orders += Z[z].orders; cost += Z[z].orders * Z[z].cost; mins += Z[z].orders * Z[z].min;
-    });
-    var hours = mins / 60, dCost = "", dHours = "";
-    if (baseCost === null) { baseCost = cost; baseHours = hours; }
-    else {
-      if (baseCost > 0) dCost = '<span class="delta-up">' + pct(cost / baseCost - 1) + "</span>";
-      if (baseHours > 0) dHours = '<span class="delta-up">' + pct(hours / baseHours - 1) + "</span>";
+  // 方案比較
+  var h = "<thead><tr><th>開放範圍</th><th>單均成本</th><th>每日成本</th><th>外送工時</th></tr></thead><tbody>";
+  R.forEach(function (r, i) {
+    var dC = "", dH = "";
+    if (i > 0) {
+      if (R[0].cost > 0) dC = '<span class="delta-up">' + pct(r.cost / R[0].cost - 1) + "</span>";
+      if (R[0].hours > 0) dH = '<span class="delta-up">' + pct(r.hours / R[0].hours - 1) + "</span>";
     }
-    h += "<tr><td>" + s[0] + '<span class="meta" style="display:block">' + fmt(orders) + " 單</span></td><td>" +
-         (orders ? fmt(cost / orders, 1) + " 元" : "–") + "</td><td>" + fmt(cost) + " 元" + dCost + "</td><td>" +
-         fmt(hours, 1) + " 小時" + dHours + "</td></tr>";
+    h += '<tr data-i="' + i + '" aria-selected="' + (i === scenIndex) + '" tabindex="0"><td>' + SCENARIOS[i][0] +
+         '<span class="meta" style="display:block">' + fmt(r.orders) + " 單</span></td><td>" +
+         (r.orders > 0 ? fmt(r.cost / r.orders, 1) + " 元" : "–") + "</td><td>" + fmt(r.cost) + " 元" + dC + "</td><td>" +
+         fmt(r.hours, 1) + " 小時" + dH + "</td></tr>";
   });
-  document.getElementById("scenOut").innerHTML = h + "</tbody>";
+  scenTbl.innerHTML = h + "</tbody>";
+
+  // 各倉（所選方案）
+  var cur = R[scenIndex];
+  zoneOwners.forEach(function (w, k) {
+    if (!w._row) return;
+    var wr = cur.wh[k], cell = function (key) { return w._row.querySelector('[data-k="' + key + '"]'); };
+    var extra = [];
+    if (wr.noBase) extra.push("這個倉在台北市內沒有標準區，無法推算");
+    else {
+      var all = R[2].wh[k].byZone;
+      extra.push("延伸區 " + fmt(all.B || 0) + " 單、山區 " + fmt(all.C || 0) + " 單");
+    }
+    cell("sub").textContent = extra.join("");
+    cell("orders").textContent = fmt(wr.orders);
+    cell("unit").textContent = wr.orders > 0 ? fmt(wr.cost / wr.orders, 1) + " 元" : "–";
+  });
+
+  // 成本組成（所選方案）
+  var max = Math.max.apply(null, cur.items.concat([1]));
+  h = "<tbody>";
+  COST.items.forEach(function (it, j) {
+    var v = cur.items[j];
+    h += "<tr><td>" + esc(it.name || "未命名") + "</td><td>" + fmt(v) + " 元</td><td>" +
+         (cur.cost > 0 ? fmt(v / cur.cost * 100) + "%" : "–") + '</td><td class="bar-cell"><div class="bar" style="width:' + (v / max * 100).toFixed(1) + '%"></div></td></tr>';
+  });
+  h += '<tr class="total"><td>每日成本</td><td>' + fmt(cur.cost) + " 元</td><td></td><td></td></tr>";
+  if (cur.revenue > 0) {
+    h += '<tr class="minus"><td>運費收入</td><td>−' + fmt(cur.revenue) + " 元</td><td></td><td></td></tr>" +
+         '<tr class="total"><td>每日淨成本</td><td>' + fmt(cur.cost - cur.revenue) + " 元</td><td></td><td></td></tr>";
+  }
+  h += "<tr><td>單均" + (cur.revenue > 0 ? "淨" : "") + "成本</td><td>" + (cur.orders > 0 ? fmt((cur.cost - cur.revenue) / cur.orders, 1) + " 元" : "–") + "</td><td></td><td></td></tr>";
+  bd.innerHTML = h + "</tbody>";
 }
 
 function drawZones() {
@@ -1038,14 +1227,38 @@ function drawZones() {
 }
 
 document.getElementById("zoneToggle").addEventListener("change", drawZones);
-["cBase", "cIncl", "cPerKm", "cSpeed", "cStop", "cReturn", "oA", "oB", "oC", "fA", "fB", "fC", "bA", "bB", "bC"].forEach(function (id) {
-  var el = document.getElementById(id);
-  el.addEventListener("input", renderCalc);
-  el.addEventListener("change", renderCalc);
+["cIncl", "cSpeed", "cStop", "cReturn", "fA", "fB", "fC", "bA", "bB", "bC", "rA", "rB", "rC", "dB", "dC"].forEach(function (id) {
+  var el = document.getElementById(id), on = function () { renderCalc(); saveCost(); };
+  el.addEventListener("input", on);
+  el.addEventListener("change", on);
 });
+document.getElementById("costAdd").addEventListener("click", function () {
+  COST.items.push({ name: "新項目", amount: 0, unit: "order" });
+  saveCost(); renderCostItems(); renderCalc();
+  var rows = document.querySelectorAll("#costItems .cost-row input[type=text]");
+  if (rows.length) { rows[rows.length - 1].focus(); rows[rows.length - 1].select(); }
+});
+document.getElementById("costReset").addEventListener("click", function () {
+  COST = defaultCost();
+  saveCost(); fillCostInputs(); renderCostItems(); renderCalc();
+});
+// 點方案比較的某一列，切換下方明細
+function pickScenario(e) {
+  var tr = e.target.closest ? e.target.closest("tr[data-i]") : null;
+  if (!tr) return;
+  if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+  if (e.type === "keydown") e.preventDefault();
+  scenIndex = +tr.getAttribute("data-i");
+  renderCalc();
+}
+document.getElementById("scenOut").addEventListener("click", pickScenario);
+document.getElementById("scenOut").addEventListener("keydown", pickScenario);
 
 // ───────── 啟動 ─────────
+fillCostInputs();
+renderCostItems();
 renderList();
+renderWhOrders();
 recomputeZones();
 (function () {
   var k = readKey();
