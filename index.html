@@ -234,7 +234,7 @@
 
     <h2>各倉單量</h2>
     <table class="calc" id="whOrders"></table>
-    <p class="hint">每日單量填的是該倉在標準區的單量。延伸區和山區的單量由下方的「單量密度」推算，會顯示在倉名下方。</p>
+    <p class="hint">每日單量填的是該倉在標準區的單量。倉名下方的延伸區和山區單量是推估值，由面積比例乘上下方的「單量密度」算出，不是實際訂單。</p>
 
     <h2>配送費用</h2>
     <table class="calc" id="feeInputs">
@@ -1147,7 +1147,7 @@ function renderCalc() {
     var wr = cur.wh[k], cell = function (key) { return w._row.querySelector('[data-k="' + key + '"]'); };
     var all = R[2].wh[k].byZone;
     cell("sub").textContent = wr.noBase ? "這個倉在台北市內沒有標準區，無法推算"
-      : "延伸區 " + fmt(all.B || 0) + " 單、山區 " + fmt(all.C || 0) + " 單";
+      : "推估：延伸區 " + fmt(all.B || 0) + " 單、山區 " + fmt(all.C || 0) + " 單";
     cell("orders").textContent = fmt(wr.orders);
     cell("unit").textContent = wr.orders > 0 ? fmt(wr.cost / wr.orders, 1) + " 元" : "–";
   });
