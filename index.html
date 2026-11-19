@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>門市倉覆蓋範圍</title>
+<style>
+  :root {
+    --ink: #1b2430; --muted: #5f6b7a; --line: #e3e6eb; --canvas: #f3f4f6; --surface: #fff;
+    --link: #1d4ed8; --danger: #b42318; --danger-bg: #fdecea; --warn: #8a5a00; --warn-bg: #fff7e6;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    font-size: 14px; line-height: 1.6; color: var(--ink); background: var(--canvas); display: flex;
+  }
+  button { font: inherit; padding: 8px 12px; border: 0; border-radius: 6px; background: var(--ink); color: #fff; cursor: pointer; }
+  button.ghost { background: #eceef2; color: var(--ink); }
+  button:disabled { opacity: .55; cursor: default; }
+  input[type=text], input[type=password], input[type=number] {
+    font: inherit; padding: 7px 9px; border: 1px solid #cdd2d9; border-radius: 6px; background: #fff; color: var(--ink);
+  }
+  :focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+  .hint { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+
+  /* ── 左側面板：上方固定，下方分頁內容各自捲動 ── */
+  #panel { width: 400px; flex: none; height: 100%; display: flex; flex-direction: column; background: var(--surface); border-right: 1px solid var(--line); }
+  #panelHead { padding: 18px 20px 14px; border-bottom: 1px solid var(--line); }
+  .title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  h1 { font-size: 18px; margin: 0; }
+  #keyStatus { display: none; font-size: 13px; color: var(--muted); white-space: nowrap; }
+  #keyStatus button { padding: 0 0 0 8px; background: none; color: var(--link); font-size: 13px; }
+
+  .radius-row { display: flex; align-items: baseline; justify-content: space-between; margin-top: 14px; }
+  .radius-row label { font-weight: 600; }
+  .radius-num { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .radius-num small { font-size: 13px; font-weight: 400; color: var(--muted); margin-left: 3px; }
+  input[type=range] { width: 100%; margin: 6px 0 0; accent-color: var(--ink); }
+
+  .zbar { display: flex; height: 12px; border-radius: 3px; overflow: hidden; margin-top: 14px; background: var(--canvas); }
+  .zbar span { display: block; min-width: 2px; }
+  .zlegend { display: grid; grid-template-columns: 14px 1fr auto auto auto; column-gap: 10px; row-gap: 3px; align-items: center; margin-top: 8px; font-size: 13px; }
+  .zlegend .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .zlegend .head { font-size: 12.5px; color: var(--muted); text-align: right; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+  #tabs { display: flex; padding: 0 20px; border-bottom: 1px solid var(--line); gap: 22px; }
+  #tabs button { background: none; color: var(--muted); padding: 11px 0 9px; border-radius: 0; border-bottom: 2px solid transparent; font-weight: 600; }
+  #tabs button[aria-selected=true] { color: var(--ink); border-bottom-color: var(--ink); }
+  .tab { flex: 1; overflow-y: auto; padding: 4px 20px 24px; min-height: 0; }
+  .tab[hidden] { display: none; }
+
+  /* 新增門市倉 */
+  .add-form { display: grid; gap: 8px; padding: 14px 0 4px; }
+  .add-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+  #whMsg { display: none; font-size: 13px; border-radius: 6px; padding: 8px 10px; margin-top: 8px; }
+  #whMsg.error { display: block; color: var(--danger); background: var(--danger-bg); }
+  #whMsg.info { display: block; color: var(--ink); background: #eceef2; }
+  #whBulk textarea { width: 100%; font: inherit; font-size: 13px; padding: 8px 9px; border: 1px solid #cdd2d9; border-radius: 6px; resize: vertical; margin: 8px 0; }
+  .wh-empty { color: var(--muted); padding: 18px 0; border-bottom: 1px solid var(--line); }
+  .wh-del { background: none; color: var(--muted); padding: 2px 6px; font-size: 13px; flex: none; }
+  .wh-del:hover { color: var(--danger); }
+  #whList { margin-top: 8px; border-top: 1px solid var(--line); }
+  .zone-empty { margin-top: 14px; font-size: 13px; color: var(--muted); }
+
+  /* 門市倉清單 */
+  .wh { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .wh input { flex: none; width: 16px; height: 16px; accent-color: var(--ink); }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  .wh-main { flex: 1; min-width: 0; cursor: pointer; }
+  .wh-name { font-weight: 600; }
+  .wh-addr { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wh-note { font-size: 13px; color: var(--warn); }
+
+  /* 成本試算：結果固定在分頁頂端，下方調整輸入時不用來回捲動 */
+  #calcResult { background: var(--surface); padding: 12px 0 10px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+  @media (min-height: 840px) { #calcResult { position: sticky; top: -4px; z-index: 1; } }  /* 視窗太矮時不固定，避免把輸入區擠掉 */
+  h2 { font-size: 14px; margin: 18px 0 8px; }
+  #calcResult h2 { margin-top: 0; }
+  table.calc { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  table.calc th { text-align: right; font-weight: 400; color: var(--muted); padding: 3px 0 3px 8px; font-size: 13px; }
+  table.calc td { padding: 5px 0 5px 8px; text-align: right; font-variant-numeric: tabular-nums; border-top: 1px solid var(--line); vertical-align: top; }
+  table.calc th:first-child, table.calc td:first-child { text-align: left; padding-left: 0; }
+  table.calc td input { width: 72px; text-align: right; padding: 5px 7px; }
+  .delta-up { color: var(--danger); font-size: 12.5px; display: block; }
+  details.more { margin-top: 8px; font-size: 13px; }
+  details.more summary { cursor: pointer; color: var(--link); }
+  .hint a { color: var(--link); }
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+  .fields label { display: block; font-size: 13px; color: var(--muted); }
+  .fields input[type=number] { width: 100%; margin-top: 3px; text-align: right; }
+  .fields .wide { grid-column: 1 / -1; color: var(--ink); font-size: 14px; }
+  .assume { font-size: 13px; color: var(--warn); background: var(--warn-bg); border-radius: 6px; padding: 8px 10px; margin-top: 14px; }
+
+  /* ── 地圖區與浮在地圖上的控制項 ── */
+  #mapWrap { flex: 1; height: 100%; position: relative; min-height: 320px; }
+  #map { position: absolute; inset: 0; }
+  .float { position: absolute; z-index: 2; background: var(--surface); border-radius: 8px; box-shadow: 0 1px 4px rgba(27,36,48,.25); }
+  #searchBox { top: 12px; left: 12px; width: min(380px, calc(100% - 24px)); padding: 8px; }
+  #searchBox form { display: flex; gap: 6px; }
+  #searchBox input { flex: 1; min-width: 0; }
+  #err { display: none; font-size: 13px; color: var(--danger); background: var(--danger-bg); padding: 8px 10px; border-radius: 6px; margin-top: 8px; }
+  #layers { top: 12px; right: 12px; padding: 8px 12px; font-size: 13.5px; }
+  #layers label { display: flex; align-items: center; gap: 7px; padding: 3px 0; cursor: pointer; white-space: nowrap; }
+  #layers .key { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+  #pickBanner { top: 70px; left: 12px; padding: 8px 8px 8px 12px; font-size: 13.5px; display: flex; align-items: center; gap: 10px; }
+  #pickBanner[hidden] { display: none; }
+  #pickBanner button { padding: 4px 10px; }
+  #resultCard { left: 12px; bottom: 34px; width: min(340px, calc(100% - 24px)); padding: 12px 14px; display: none; }
+  #resultClose { position: absolute; top: 6px; right: 6px; background: none; color: var(--muted); padding: 2px 8px; font-size: 18px; line-height: 1; }
+  #result { font-size: 13.5px; padding-right: 22px; }
+  #result table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  #result td { padding: 2px 0; }
+  #result td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  .in { color: #17803d; font-weight: 600; }
+  .out { color: #8a929c; }
+  .verdict { font-weight: 600; font-size: 14.5px; }
+  .verdict.bad { color: var(--danger); }
+  .meta { color: var(--muted); font-size: 13px; }
+
+  /* ── API Key 引導畫面 ── */
+  #onboard { position: absolute; inset: 0; z-index: 5; background: var(--canvas); overflow-y: auto; display: flex; justify-content: center; padding: 40px 24px; }
+  #onboard .card { width: 100%; max-width: 560px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 28px 30px; height: max-content; }
+  #onboard h2 { font-size: 20px; margin: 0 0 6px; }
+  #onboard .lead { color: var(--muted); line-height: 1.7; margin: 0 0 20px; }
+  .step { display: flex; gap: 14px; padding: 16px 0; border-top: 1px solid var(--line); }
+  .step-no { width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
+  .step-body { flex: 1; min-width: 0; line-height: 1.7; }
+  .step-title { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+  .sub-title { font-weight: 600; font-size: 13.5px; margin-top: 12px; }
+  .step-body ol { margin: 6px 0 0; padding-left: 20px; }
+  .step-body a { color: var(--link); }
+  .step-body code { background: #eceef2; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  .key-row { display: flex; gap: 8px; margin-top: 8px; }
+  .key-row input { flex: 1; min-width: 0; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  #obMsg { display: none; font-size: 13.5px; line-height: 1.7; border-radius: 6px; padding: 10px 12px; margin-top: 12px; }
+  #obMsg.error { display: block; color: var(--danger); background: var(--danger-bg); }
+  #obMsg.warn { display: block; color: var(--warn); background: var(--warn-bg); }
+  #obMsg ul { margin: 4px 0 0; padding-left: 20px; }
+  .privacy { font-size: 13px; color: var(--muted); line-height: 1.7; margin-top: 10px; }
+
+  @media (max-width: 760px) {
+    body { flex-direction: column; }
+    #panel { width: 100%; height: 52%; border-right: 0; border-bottom: 1px solid var(--line); }
+    #mapWrap { height: auto; }
+    #layers { top: 64px; right: auto; left: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<aside id="panel">
+  <div id="panelHead">
+    <div class="title-row">
+      <h1>門市倉覆蓋範圍</h1>
+      <div id="keyStatus">Key <span id="keyTail"></span><button id="keyChange" type="button">更換</button><button id="keyClear" type="button">清除</button></div>
+    </div>
+
+    <div class="radius-row">
+      <label for="radius">服務半徑（直線）</label>
+      <span class="radius-num"><span id="radiusVal">5.0</span><small>公里</small></span>
+    </div>
+    <input type="range" id="radius" min="1" max="10" step="0.5" value="5">
+
+    <div id="zoneLegend" aria-label="台北市服務分區"></div>
+  </div>
+
+  <div id="tabs" role="tablist">
+    <button type="button" role="tab" id="tabBtnWh" aria-controls="tabWh" aria-selected="true">門市倉</button>
+    <button type="button" role="tab" id="tabBtnCost" aria-controls="tabCost" aria-selected="false">成本試算</button>
+  </div>
+
+  <section class="tab" id="tabWh" role="tabpanel" aria-labelledby="tabBtnWh">
+    <form id="whForm" class="add-form" autocomplete="off">
+      <input type="text" id="whName" placeholder="名稱，例如 A 倉" aria-label="門市倉名稱">
+      <input type="text" id="whAddr" placeholder="地址，或座標 25.0478, 121.5170" aria-label="地址或座標">
+      <div class="add-actions">
+        <button type="submit">新增門市倉</button>
+        <button type="button" class="ghost" id="whPick">改在地圖上點選</button>
+      </div>
+    </form>
+    <div id="whMsg" role="status"></div>
+
+    <div id="whList"></div>
+
+    <details class="more" id="whBulk">
+      <summary>一次貼上多個、匯出目前清單</summary>
+      <p class="hint">一行一個。可以寫「名稱, 地址」，或「名稱, 緯度, 經度, 地址」（地址可省略）。有座標的不需要 API Key 就能新增。</p>
+      <textarea id="whBulkText" rows="5" placeholder="A 倉, 台北市信義區市府路1號&#10;B 倉, 25.0478, 121.5170" aria-label="批次貼上門市倉"></textarea>
+      <div class="add-actions">
+        <button type="button" id="whBulkAdd">加入清單</button>
+        <button type="button" class="ghost" id="whExport">把目前清單填入上方</button>
+        <button type="button" class="ghost" id="whClearAll">清空清單</button>
+      </div>
+    </details>
+
+    <p class="hint">清單只存在這台電腦的這個瀏覽器。取消勾選可以模擬少一個倉的情況，分區和成本會一起重算。</p>
+    <p class="hint">分區只計算台北市內，以半徑和 Uber Eats 服務範圍劃分：兩者都符合是標準區，超過半徑但 Uber Eats 有送是延伸區，Uber Eats 不送的算山區。</p>
+
+    <details class="more">
+      <summary>資料來源與限制</summary>
+      <p class="hint">Uber Eats 服務範圍取自 Uber Eats 公開的<a href="https://www.google.com/maps/d/viewer?mid=1GoUS2zzDUKbtL8qiIt5SWdIGFlIxHv0" target="_blank" rel="noopener">北北基服務範圍地圖</a>，資料更新時間為 2025-11-20，邊界經過簡化（約 100 公尺），現況可能已經不同。這個工具與 Uber Eats 無關。</p>
+      <p class="hint">台北市界取自 <a href="https://github.com/g0v/twgeojson" target="_blank" rel="noopener">g0v/twgeojson</a> 的縣市界資料，簡化至約 30 公尺。</p>
+      <p class="hint">所有距離都是直線距離，沒有考慮河流、山路與實際路線。成本試算的結果取決於你填入的假設，僅供估算。</p>
+    </details>
+  </section>
+
+  <section class="tab" id="tabCost" role="tabpanel" aria-labelledby="tabBtnCost" hidden>
+    <div id="calcResult">
+      <h2>方案比較</h2>
+      <table class="calc" id="scenOut"></table>
+      <details class="more">
+        <summary>各分區的單均里程、成本、工時</summary>
+        <table class="calc" id="zoneOut" style="margin-top:6px"></table>
+        <p class="hint">平均距離以面積計算，每一小格視為等量訂單。山區與延伸區的住戶多半住在靠市區的一側，實際距離可能較短。</p>
+      </details>
+    </div>
+
+    <h2>各分區的單量與配送條件</h2>
+    <table class="calc" id="zoneInputs">
+      <thead><tr><th>分區</th><th>每日單量</th><th>路線係數</th><th>每趟併單</th></tr></thead>
+      <tbody>
+        <tr><td>標準區</td><td><input type="number" id="oA" value="1000" min="0" step="10" aria-label="標準區每日單量"></td><td><input type="number" id="fA" value="1.3" min="1" step="0.1" aria-label="標準區路線係數"></td><td><input type="number" id="bA" value="1" min="1" step="0.5" aria-label="標準區每趟併單數"></td></tr>
+        <tr><td>延伸區</td><td><input type="number" id="oB" value="30" min="0" step="5" aria-label="延伸區每日單量"></td><td><input type="number" id="fB" value="1.6" min="1" step="0.1" aria-label="延伸區路線係數"></td><td><input type="number" id="bB" value="1" min="1" step="0.5" aria-label="延伸區每趟併單數"></td></tr>
+        <tr><td>山區</td><td><input type="number" id="oC" value="10" min="0" step="5" aria-label="山區每日單量"></td><td><input type="number" id="fC" value="1.8" min="1" step="0.1" aria-label="山區路線係數"></td><td><input type="number" id="bC" value="1" min="1" step="0.5" aria-label="山區每趟併單數"></td></tr>
+      </tbody>
+    </table>
+    <p class="hint">路線係數是實際里程相對直線距離的倍數。每趟併單是一趟送幾張單，預約單可以填大於 1。</p>
+
+    <h2>計價方式</h2>
+    <div class="fields">
+      <label>每趟基本費（元）<input type="number" id="cBase" value="60" min="0" step="1"></label>
+      <label>基本費內含里程（公里）<input type="number" id="cIncl" value="2" min="0" step="0.5"></label>
+      <label>超過後每公里加收（元）<input type="number" id="cPerKm" value="10" min="0" step="1"></label>
+      <label>外送平均時速（公里／小時）<input type="number" id="cSpeed" value="25" min="1" step="1"></label>
+      <label>每單交付停留（分鐘）<input type="number" id="cStop" value="5" min="0" step="1"></label>
+      <label class="wide"><input type="checkbox" id="cReturn"> 回程里程也計費</label>
+    </div>
+    <div class="assume">預設值都是示範用的假設，不是實際費率或單量，請換成你們的數字。</div>
+  </section>
+</aside>
+
+<div id="mapWrap">
+  <div id="map"></div>
+
+  <div id="searchBox" class="float">
+    <form id="addrForm">
+      <input type="text" id="addr" placeholder="輸入地址查詢，或直接點地圖" aria-label="查詢地址">
+      <button type="submit" id="addrBtn">查詢</button>
+    </form>
+    <div id="err" role="alert"></div>
+  </div>
+
+  <div id="layers" class="float" role="group" aria-label="地圖圖層">
+    <label><input type="checkbox" id="zoneToggle" checked> 服務分區著色</label>
+    <label><input type="checkbox" id="uberToggle"> <span class="key" style="background:#7c3aed"></span>Uber Eats 服務範圍</label>
+    <label><input type="checkbox" id="tpeToggle" checked> <span class="key" style="border:2px solid #111827"></span>台北市界</label>
+  </div>
+
+  <div id="resultCard" class="float">
+    <button type="button" id="resultClose" aria-label="關閉查詢結果">×</button>
+    <div id="result"></div>
+  </div>
+  <div id="pickBanner" class="float" hidden>在地圖上點一下要新增門市倉的位置 <button type="button" class="ghost" id="pickCancel">取消</button></div>
+  <div id="onboard">
+    <div class="card">
+      <h2>載入地圖前，需要你自己的 Google Maps API Key</h2>
+      <p class="lead">這個工具沒有內建 Key，每位使用者用自己的 Key 載入地圖，用量也算在各自的帳戶上。不載入地圖也可以先用座標新增門市倉，左側的分區面積與成本試算照常運作。</p>
+
+      <div class="step">
+        <div class="step-no">1</div>
+        <div class="step-body">
+          <div class="step-title">申請 API Key（約 5 到 10 分鐘）</div>
+          已經有 Key 可以直接跳到步驟 3。需要準備一個 Google 帳號和一張信用卡，信用卡只用來建立帳單帳戶，用量在免費額度內不會扣款。
+
+          <div class="sub-title">A. 建立專案並綁定帳單</div>
+          <ol>
+            <li>開啟 <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> 並登入。</li>
+            <li>點最上方的專案選單，按「新增專案」，名稱自訂（例如 <code>coverage-map</code>），按「建立」。</li>
+            <li>開啟 <a href="https://console.cloud.google.com/billing" target="_blank" rel="noopener">帳單頁面</a>，依畫面指示建立帳單帳戶並連結到剛才的專案。</li>
+          </ol>
+
+          <div class="sub-title">B. 啟用需要的 API</div>
+          <ol>
+            <li>開啟 <a href="https://console.cloud.google.com/google/maps-apis/api-list" target="_blank" rel="noopener">Google Maps Platform 的 API 清單</a>，確認上方選的是剛建立的專案。</li>
+            <li>找到 <code>Maps JavaScript API</code>，點進去按「啟用」。這是顯示地圖必要的。</li>
+            <li>找到 <code>Geocoding API</code>，同樣按「啟用」。只有用到「輸入地址查詢」時才需要。</li>
+          </ol>
+
+          <div class="sub-title">C. 建立金鑰</div>
+          <ol>
+            <li>開啟 <a href="https://console.cloud.google.com/google/maps-apis/credentials" target="_blank" rel="noopener">Google Maps Platform 的憑證頁</a>。</li>
+            <li>按「建立憑證」，選「API 金鑰」。</li>
+            <li>畫面會顯示一串 <code>AIza</code> 開頭的文字，按複製。之後也可以回到這一頁按「顯示金鑰」再看一次。</li>
+          </ol>
+
+          <p class="privacy" style="margin-top:8px">Google 會不定期調整後台的按鈕名稱和位置，如果畫面和上面寫的不同，請以 <a href="https://developers.google.com/maps/get-started?hl=zh-tw" target="_blank" rel="noopener">Google 官方的設定教學</a> 為準。公司配發的 Google 帳號有時被管理員限制，無法建立專案或綁定帳單，遇到這種情況請洽 IT。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-no">2</div>
+        <div class="step-body">
+          <div class="step-title">設定用量保護（建議）</div>
+          <ol>
+            <li>在憑證頁點進剛建立的金鑰。「API 限制」選「限制金鑰」，只勾 <code>Maps JavaScript API</code> 和 <code>Geocoding API</code>。</li>
+            <li id="refTip">應用程式限制：選「無」。這份檔案是直接從電腦開啟，設了網站限制的 Key 會被拒絕。</li>
+            <li>在 <a href="https://console.cloud.google.com/google/maps-apis/quotas" target="_blank" rel="noopener">配額頁</a> 把這兩個 API 的每日上限設成幾百次，超過就停用，不會產生費用。</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-no">3</div>
+        <div class="step-body">
+          <div class="step-title">貼上 Key</div>
+          <form id="keyForm" autocomplete="off">
+            <div class="key-row">
+              <input type="password" id="keyInput" placeholder="AIza 開頭，共 39 個字元" spellcheck="false" aria-label="Google Maps API Key">
+              <button type="button" class="ghost" id="keyShow">顯示</button>
+            </div>
+            <label style="display:block;margin-top:10px;font-size:13.5px"><input type="checkbox" id="keyRemember" checked> 記在這台電腦的這個瀏覽器，下次開啟不用再貼</label>
+            <div class="key-row" style="margin-top:12px"><button type="submit" id="keyBtn">載入地圖</button></div>
+          </form>
+          <div id="obMsg" role="alert"></div>
+          <p class="privacy">Key 只會存在你這台電腦的瀏覽器裡，不會上傳到這個網站，也不會出現在網址上，其他使用者拿不到你的 Key。沒有勾選記住時，關閉分頁就會清除。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ───────── 資料 ─────────
+// 門市倉清單由使用者自行新增，存在這台電腦的瀏覽器裡（不寫進檔案）。
+// 每一筆：{ name 名稱, addr 地址或座標文字, lat, lng, color, visible }
+var WH_STORE = "coverage_warehouses";
+var PALETTE = ["#2563eb", "#d97706", "#059669", "#c026d3", "#dc2626", "#0891b2", "#7c2d12", "#4f46e5", "#be185d", "#4d7c0f"];
+var WAREHOUSES = (function () {
+  try {
+    var raw = JSON.parse(localStorage.getItem(WH_STORE) || "[]");
+    return raw.filter(function (w) { return w && isFinite(w.lat) && isFinite(w.lng); }).map(function (w) {
+      return { name: String(w.name || "門市倉"), addr: String(w.addr || ""), lat: +w.lat, lng: +w.lng,
+               color: w.color || PALETTE[0], visible: w.visible !== false };
+    });
+  } catch (e) { return []; }
+})();
+function saveWarehouses() {
+  try {
+    localStorage.setItem(WH_STORE, JSON.stringify(WAREHOUSES.map(function (w) {
+      return { name: w.name, addr: w.addr, lat: w.lat, lng: w.lng, color: w.color, visible: w.visible };
+    })));
+  } catch (e) {}
+}
+
+// 台北市行政區界（[緯度, 經度]，來源：g0v/twgeojson 縣市界，已簡化至約 30 公尺精度）
+var TAIPEI = [[[[25.21013,121.55916],[25.20942,121.56269],[25.20581,121.56351],[25.20479,121.56439],[25.20283,121.56496],[25.20102,121.56484],[25.19966,121.56615],[25.19815,121.5701],[25.1954,121.57172],[25.19498,121.57291],[25.19556,121.57582],[25.19528,121.57721],[25.19414,121.57912],[25.19537,121.58052],[25.19458,121.58374],[25.19308,121.58271],[25.19202,121.58375],[25.18894,121.58402],[25.18859,121.58301],[25.18758,121.58301],[25.18635,121.58183],[25.18434,121.58275],[25.18188,121.58088],[25.18043,121.58128],[25.17981,121.58217],[25.17902,121.58217],[25.17687,121.58349],[25.1738,121.58172],[25.17013,121.57736],[25.16699,121.57704],[25.16556,121.57902],[25.16544,121.58239],[25.16577,121.58323],[25.16503,121.58364],[25.16296,121.58791],[25.16373,121.58986],[25.16033,121.59052],[25.15767,121.59177],[25.1559,121.59184],[25.15336,121.59041],[25.15242,121.58936],[25.15029,121.59358],[25.1481,121.59389],[25.14522,121.59586],[25.14335,121.59583],[25.14256,121.59697],[25.14029,121.59841],[25.13935,121.60054],[25.13789,121.6017],[25.13717,121.60323],[25.13619,121.60409],[25.13699,121.60507],[25.13675,121.60568],[25.13455,121.60458],[25.13084,121.60461],[25.1302,121.60784],[25.12915,121.60749],[25.12577,121.60421],[25.12551,121.60345],[25.12618,121.60276],[25.12598,121.6017],[25.1218,121.60073],[25.12035,121.59982],[25.12011,121.59888],[25.1161,121.59745],[25.11413,121.59561],[25.11347,121.5955],[25.10951,121.5975],[25.10843,121.59965],[25.10839,121.60229],[25.10737,121.60481],[25.10729,121.60631],[25.10674,121.60803],[25.10513,121.61045],[25.10395,121.61525],[25.10117,121.61735],[25.09829,121.62152],[25.09734,121.6221],[25.09692,121.62337],[25.09705,121.62534],[25.09604,121.62623],[25.09504,121.62534],[25.09373,121.62504],[25.09147,121.62631],[25.0905,121.62598],[25.08798,121.62822],[25.08645,121.62859],[25.0847,121.62752],[25.08323,121.62795],[25.08226,121.62731],[25.08202,121.626],[25.08038,121.62423],[25.07919,121.62447],[25.0785,121.62383],[25.07782,121.62455],[25.07717,121.62315],[25.07553,121.62339],[25.07512,121.6239],[25.07501,121.62317],[25.07462,121.62313],[25.07455,121.62378],[25.07403,121.62316],[25.07402,121.62363],[25.07356,121.62281],[25.07418,121.62283],[25.07472,121.62195],[25.07339,121.62061],[25.06956,121.62147],[25.06864,121.61956],[25.06763,121.61854],[25.0676,121.61761],[25.06511,121.61789],[25.06586,121.61676],[25.06392,121.61614],[25.06292,121.61883],[25.06159,121.62053],[25.05575,121.62424],[25.05501,121.62337],[25.05639,121.62183],[25.05665,121.62051],[25.05582,121.62017],[25.05424,121.62101],[25.05342,121.62084],[25.05232,121.61818],[25.05063,121.61631],[25.04816,121.61645],[25.04346,121.6191],[25.04008,121.6219],[25.03955,121.62423],[25.03778,121.62475],[25.03795,121.62641],[25.03668,121.6296],[25.03511,121.63019],[25.03572,121.63354],[25.03485,121.63401],[25.03501,121.63481],[25.0338,121.63785],[25.03207,121.63981],[25.03051,121.64371],[25.02979,121.64423],[25.02941,121.64593],[25.02799,121.64679],[25.02865,121.64799],[25.02796,121.64871],[25.02813,121.64942],[25.02762,121.65021],[25.02816,121.65182],[25.02757,121.65261],[25.02794,121.65417],[25.02747,121.65511],[25.02789,121.65666],[25.02895,121.6578],[25.03046,121.6608],[25.02955,121.6648],[25.02984,121.66593],[25.02782,121.66483],[25.02596,121.66537],[25.02467,121.66491],[25.02328,121.66407],[25.02294,121.66325],[25.02343,121.66003],[25.02324,121.6576],[25.02444,121.65382],[25.02393,121.65176],[25.02399,121.6499],[25.0217,121.64632],[25.02358,121.64489],[25.02458,121.64298],[25.02351,121.64073],[25.02413,121.63754],[25.02322,121.63566],[25.02404,121.63563],[25.02561,121.63242],[25.02448,121.63077],[25.02221,121.63024],[25.01987,121.62886],[25.01952,121.62688],[25.01864,121.62619],[25.01726,121.62327],[25.01839,121.62047],[25.01811,121.61938],[25.01844,121.61739],[25.01968,121.61616],[25.0192,121.61364],[25.01989,121.6103],[25.02094,121.6092],[25.01944,121.60819],[25.01905,121.60408],[25.01505,121.60254],[25.01474,121.59747],[25.01313,121.5975],[25.01199,121.59651],[25.00918,121.59586],[25.0046,121.59589],[25.00411,121.59788],[25.00263,121.59959],[25.00104,121.60047],[24.99847,121.6005],[24.99763,121.5997],[24.99637,121.59959],[24.99581,121.59867],[24.99457,121.59814],[24.99356,121.5985],[24.99298,121.59935],[24.99166,121.59906],[24.99032,121.60195],[24.98788,121.6018],[24.98721,121.60043],[24.98633,121.59983],[24.98028,121.60064],[24.97862,121.59932],[24.97696,121.60017],[24.97546,121.60387],[24.97439,121.60522],[24.97478,121.60866],[24.97423,121.61012],[24.97461,121.6113],[24.97341,121.61329],[24.97358,121.61419],[24.97157,121.61635],[24.97024,121.61961],[24.96936,121.62],[24.96875,121.61957],[24.9672,121.61968],[24.96683,121.61807],[24.96751,121.61692],[24.96616,121.61497],[24.96643,121.61367],[24.96539,121.61207],[24.96497,121.61043],[24.96309,121.60834],[24.96296,121.60505],[24.96094,121.60145],[24.96126,121.59842],[24.96049,121.59721],[24.96154,121.59486],[24.96423,121.59328],[24.96394,121.59195],[24.96463,121.59109],[24.96338,121.58874],[24.9637,121.58804],[24.9632,121.58576],[24.96455,121.58455],[24.96517,121.58106],[24.96661,121.5786],[24.96685,121.57457],[24.96529,121.57433],[24.96399,121.57265],[24.96444,121.5703],[24.96396,121.56629],[24.96435,121.56574],[24.96409,121.565],[24.96468,121.56422],[24.96468,121.56124],[24.9683,121.55854],[24.97188,121.55768],[24.97331,121.55613],[24.97655,121.55521],[24.9774,121.55369],[24.98085,121.55305],[24.98484,121.55393],[24.98718,121.55208],[24.98722,121.55083],[24.9854,121.55086],[24.98374,121.54899],[24.98328,121.54693],[24.9837,121.54497],[24.98479,121.54419],[24.98697,121.54479],[24.9882,121.54417],[24.98773,121.53956],[24.98869,121.53687],[24.98963,121.53658],[24.99226,121.53706],[24.99512,121.53527],[24.99217,121.53348],[24.98818,121.52929],[24.98704,121.52789],[24.98713,121.52671],[24.99132,121.5278],[24.99523,121.5301],[25.00082,121.53242],[25.00702,121.53249],[25.00955,121.53104],[25.01019,121.52863],[25.01168,121.52591],[25.01744,121.52169],[25.01922,121.51978],[25.0216,121.51332],[25.02182,121.51116],[25.02144,121.50937],[25.01833,121.50568],[25.01192,121.50022],[25.00932,121.4953],[25.00936,121.49286],[25.01397,121.48892],[25.01717,121.4879],[25.02318,121.48873],[25.02937,121.48597],[25.03274,121.48629],[25.03598,121.48748],[25.0394,121.49007],[25.04174,121.49306],[25.04523,121.50026],[25.04833,121.50322],[25.05497,121.5051],[25.06076,121.50566],[25.06464,121.50683],[25.07029,121.50705],[25.07472,121.50607],[25.0832,121.50248],[25.08715,121.49982],[25.09715,121.48873],[25.09877,121.48603],[25.10087,121.48107],[25.1014,121.47814],[25.10172,121.46613],[25.10391,121.46132],[25.10809,121.45721],[25.11054,121.45761],[25.11618,121.46092],[25.12296,121.45878],[25.12302,121.46139],[25.12355,121.46174],[25.12425,121.46482],[25.12757,121.4643],[25.13169,121.4657],[25.13436,121.46826],[25.13551,121.46883],[25.13732,121.47157],[25.13952,121.47282],[25.14281,121.47644],[25.14394,121.47674],[25.14688,121.48062],[25.15024,121.48291],[25.15083,121.4839],[25.15081,121.48655],[25.15141,121.48744],[25.15299,121.48762],[25.16048,121.49246],[25.16505,121.49882],[25.16831,121.50011],[25.16956,121.5019],[25.17123,121.50164],[25.17244,121.50257],[25.17325,121.50257],[25.17323,121.50486],[25.17112,121.50572],[25.1712,121.50698],[25.16945,121.5104],[25.16938,121.51128],[25.17075,121.51261],[25.17098,121.5137],[25.16929,121.51997],[25.17461,121.52253],[25.17678,121.52197],[25.17791,121.52231],[25.17913,121.52171],[25.183,121.52605],[25.18362,121.53341],[25.18455,121.53471],[25.18668,121.53584],[25.18739,121.5411],[25.18889,121.54281],[25.19142,121.54275],[25.19403,121.54338],[25.19695,121.5463],[25.19708,121.54747],[25.19807,121.5483],[25.19815,121.54898],[25.19712,121.55067],[25.19782,121.55191],[25.19887,121.5526],[25.20062,121.55263],[25.20201,121.55152],[25.2035,121.55171],[25.2042,121.5531],[25.20844,121.55501],[25.20872,121.55693],[25.21013,121.55916]]]];
+
+// Uber Eats 北北基服務範圍（[緯度, 經度]）。來源：Uber Eats 公開的 Google 我的地圖，資料更新時間 2025-11-20，
+// 已簡化至約 100 公尺精度。main 為主要範圍、holes 為範圍內不服務的區塊、new 為標示「新開通」的區塊。
+var UBER = {"main":[[24.9385,121.3158],[24.935,121.3179],[24.9314,121.3231],[24.928,121.322],[24.9288,121.3265],[24.9319,121.3286],[24.9292,121.3369],[24.9341,121.3446],[24.9455,121.3525],[24.943,121.3544],[24.942,121.3528],[24.9392,121.3537],[24.9397,121.3569],[24.9354,121.352],[24.9367,121.3562],[24.9347,121.3581],[24.9357,121.3619],[24.9342,121.3678],[24.93,121.3671],[24.9255,121.3612],[24.9185,121.3605],[24.9129,121.363],[24.9055,121.3567],[24.9033,121.3496],[24.9003,121.3505],[24.8991,121.3526],[24.9036,121.3567],[24.9048,121.3596],[24.903,121.361],[24.9055,121.3634],[24.9033,121.3654],[24.9008,121.3651],[24.8983,121.3706],[24.8926,121.3732],[24.8935,121.3756],[24.8973,121.3758],[24.897,121.3773],[24.909,121.3756],[24.9109,121.3795],[24.9136,121.3685],[24.9254,121.374],[24.9318,121.3907],[24.9288,121.3948],[24.931,121.3965],[24.9262,121.4032],[24.9295,121.4051],[24.9288,121.4084],[24.9271,121.4091],[24.9248,121.4146],[24.9282,121.4175],[24.929,121.4139],[24.9348,121.4082],[24.9343,121.4044],[24.9355,121.4024],[24.9388,121.4],[24.9419,121.4006],[24.9418,121.4034],[24.9461,121.4051],[24.9526,121.4171],[24.9587,121.4234],[24.9603,121.4319],[24.956,121.436],[24.9609,121.4386],[24.9602,121.4427],[24.9536,121.4459],[24.9538,121.4474],[24.9567,121.4498],[24.9584,121.445],[24.9606,121.4444],[24.9631,121.4482],[24.9653,121.4474],[24.9688,121.4564],[24.9679,121.4614],[24.9719,121.4594],[24.9752,121.4609],[24.9774,121.4659],[24.9746,121.4679],[24.9773,121.4709],[24.9771,121.4721],[24.9744,121.4708],[24.9761,121.4737],[24.9738,121.474],[24.9693,121.4713],[24.9677,121.4738],[24.9699,121.4801],[24.9767,121.4754],[24.9774,121.4771],[24.9794,121.4773],[24.9812,121.4708],[24.9871,121.4793],[24.9822,121.476],[24.9778,121.4803],[24.9675,121.4829],[24.9663,121.4864],[24.9678,121.4899],[24.9705,121.4935],[24.9722,121.4923],[24.9751,121.4956],[24.9711,121.4975],[24.9714,121.502],[24.9781,121.5058],[24.9778,121.508],[24.9757,121.5049],[24.9691,121.5074],[24.9653,121.5126],[24.9562,121.4976],[24.9591,121.4902],[24.9657,121.4878],[24.9644,121.4795],[24.9594,121.4716],[24.9526,121.4744],[24.9542,121.4786],[24.9509,121.4829],[24.9432,121.4745],[24.9416,121.4806],[24.9439,121.4827],[24.9429,121.4843],[24.9443,121.4845],[24.9425,121.4874],[24.9468,121.4931],[24.9451,121.4949],[24.9436,121.5019],[24.9384,121.5001],[24.9349,121.5048],[24.9317,121.5031],[24.9294,121.4978],[24.9262,121.4964],[24.9234,121.4979],[24.9237,121.5015],[24.9307,121.5104],[24.93,121.5183],[24.9324,121.5185],[24.936,121.5137],[24.9392,121.5121],[24.9361,121.5069],[24.9377,121.5043],[24.9402,121.5069],[24.9451,121.5057],[24.9452,121.518],[24.9505,121.5189],[24.9517,121.5213],[24.9506,121.5194],[24.9453,121.5185],[24.9368,121.5278],[24.9381,121.5394],[24.9305,121.5395],[24.928,121.543],[24.928,121.5459],[24.927,121.5432],[24.9212,121.5414],[24.9184,121.5455],[24.9205,121.5517],[24.9267,121.5481],[24.9301,121.5569],[24.9279,121.5615],[24.9293,121.564],[24.932,121.5626],[24.936,121.5543],[24.9351,121.5473],[24.9374,121.548],[24.9405,121.5421],[24.9451,121.5445],[24.9521,121.5414],[24.9495,121.5508],[24.9496,121.5546],[24.9526,121.5588],[24.9507,121.5655],[24.9561,121.5659],[24.9539,121.5643],[24.9564,121.5607],[24.9547,121.558],[24.9557,121.5537],[24.9545,121.5521],[24.9567,121.5501],[24.9583,121.5522],[24.9603,121.5499],[24.9638,121.5511],[24.9661,121.5473],[24.9748,121.5558],[24.9763,121.5558],[24.9767,121.5568],[24.967,121.5616],[24.9651,121.5653],[24.9653,121.572],[24.9674,121.576],[24.9629,121.5964],[24.966,121.6003],[24.9684,121.597],[24.9703,121.5986],[24.9687,121.6037],[24.972,121.6046],[24.9741,121.6032],[24.9773,121.5866],[24.9814,121.5829],[24.9848,121.5812],[24.9841,121.5879],[24.9878,121.5905],[24.9896,121.5897],[24.9904,121.583],[24.989,121.5772],[24.9911,121.5787],[24.9936,121.5763],[24.9945,121.5727],[24.9985,121.5759],[25.0015,121.5843],[25.0042,121.5837],[25.0096,121.5657],[25.0141,121.572],[25.0152,121.5787],[25.0198,121.5806],[25.039,121.5966],[25.0367,121.6006],[25.0486,121.6014],[25.0497,121.5988],[25.0513,121.6092],[25.0502,121.6113],[25.0432,121.6114],[25.043,121.6103],[25.0402,121.6115],[25.0401,121.613],[25.0386,121.612],[25.0374,121.6144],[25.0369,121.6125],[25.0348,121.6117],[25.035,121.6084],[25.033,121.6091],[25.0327,121.6123],[25.0361,121.6179],[25.0351,121.6247],[25.0382,121.6281],[25.0392,121.6275],[25.0379,121.6346],[25.04,121.6372],[25.0429,121.6378],[25.0462,121.6346],[25.0411,121.6263],[25.0462,121.625],[25.0487,121.6261],[25.0516,121.6217],[25.0572,121.6226],[25.0538,121.6271],[25.0542,121.632],[25.0571,121.6407],[25.0604,121.6451],[25.0581,121.6475],[25.0612,121.651],[25.0556,121.6528],[25.0555,121.6554],[25.0547,121.654],[25.0526,121.6547],[25.0534,121.658],[25.0585,121.6566],[25.0603,121.6591],[25.0579,121.6607],[25.0577,121.6653],[25.0546,121.6669],[25.0545,121.6701],[25.0593,121.6708],[25.0605,121.6671],[25.0583,121.6652],[25.0619,121.6628],[25.0629,121.6658],[25.0667,121.6661],[25.0662,121.6752],[25.0694,121.679],[25.0707,121.6871],[25.0763,121.6928],[25.0708,121.696],[25.0709,121.6974],[25.0764,121.699],[25.0774,121.6936],[25.0813,121.7008],[25.0778,121.7128],[25.079,121.7137],[25.0835,121.7105],[25.0888,121.7189],[25.0864,121.7231],[25.0876,121.7252],[25.0934,121.7238],[25.0982,121.7283],[25.0912,121.7341],[25.0889,121.7324],[25.0866,121.7331],[25.0874,121.7358],[25.0909,121.7363],[25.0829,121.7482],[25.0849,121.7494],[25.0874,121.7481],[25.0875,121.7451],[25.0924,121.7404],[25.0937,121.741],[25.0947,121.7519],[25.0889,121.7524],[25.0883,121.7536],[25.0895,121.7555],[25.096,121.7555],[25.0989,121.7587],[25.0957,121.7599],[25.0949,121.762],[25.0993,121.7657],[25.1037,121.7669],[25.103,121.7688],[25.1064,121.7721],[25.1059,121.7743],[25.1014,121.7749],[25.0948,121.7822],[25.0974,121.7905],[25.0997,121.7934],[25.1022,121.794],[25.0995,121.7985],[25.1025,121.7961],[25.1096,121.7948],[25.1057,121.8033],[25.102,121.8031],[25.1053,121.8049],[25.1047,121.8076],[25.1027,121.8081],[25.1028,121.8094],[25.1048,121.81],[25.1053,121.8162],[25.1033,121.8171],[25.1026,121.8217],[25.106,121.8237],[25.1051,121.8309],[25.1078,121.8297],[25.107,121.8251],[25.1112,121.8312],[25.1048,121.847],[25.1111,121.8499],[25.1124,121.8486],[25.1108,121.84],[25.1125,121.8308],[25.1076,121.8235],[25.1073,121.8208],[25.1092,121.8188],[25.11,121.8084],[25.1149,121.8225],[25.1178,121.8214],[25.1211,121.8245],[25.1228,121.8199],[25.1287,121.8185],[25.1339,121.8214],[25.1331,121.8227],[25.1355,121.8224],[25.1311,121.815],[25.1363,121.8027],[25.1359,121.8003],[25.1315,121.8109],[25.1277,121.8099],[25.1263,121.8133],[25.1281,121.8146],[25.1264,121.818],[25.1224,121.8194],[25.1188,121.8163],[25.1173,121.8192],[25.1145,121.8174],[25.1126,121.8061],[25.1139,121.8013],[25.1131,121.7921],[25.11,121.787],[25.1026,121.7837],[25.1009,121.78],[25.1015,121.7782],[25.105,121.7787],[25.1093,121.7764],[25.1098,121.771],[25.1049,121.7662],[25.1078,121.7635],[25.1051,121.7571],[25.107,121.7415],[25.1099,121.737],[25.113,121.7396],[25.1152,121.7454],[25.1176,121.7456],[25.1221,121.7601],[25.1233,121.7609],[25.1271,121.7592],[25.1255,121.7617],[25.1264,121.7629],[25.125,121.7636],[25.1275,121.7647],[25.1249,121.7669],[25.127,121.7719],[25.1255,121.7744],[25.1271,121.7762],[25.1281,121.7755],[25.1265,121.7786],[25.1268,121.7818],[25.1231,121.788],[25.123,121.7922],[25.1246,121.7926],[25.1266,121.789],[25.1254,121.7878],[25.1298,121.7869],[25.1296,121.7845],[25.133,121.7855],[25.1333,121.7869],[25.1318,121.7874],[25.1331,121.7917],[25.1355,121.7915],[25.135,121.7941],[25.1367,121.7991],[25.1379,121.799],[25.1362,121.8004],[25.1366,121.8022],[25.1391,121.8006],[25.144,121.8036],[25.1418,121.7989],[25.1446,121.8012],[25.1471,121.7944],[25.1467,121.7935],[25.1418,121.7952],[25.1407,121.7937],[25.1469,121.7853],[25.1504,121.7841],[25.1525,121.7755],[25.1575,121.7729],[25.1586,121.7634],[25.1544,121.7627],[25.1539,121.7684],[25.1489,121.7615],[25.1444,121.7595],[25.1377,121.7473],[25.1395,121.7447],[25.1449,121.7536],[25.148,121.7529],[25.1467,121.7504],[25.1489,121.7492],[25.1503,121.7527],[25.1522,121.7514],[25.1501,121.7467],[25.151,121.7449],[25.1551,121.7521],[25.1569,121.7492],[25.1569,121.7422],[25.1607,121.7382],[25.1587,121.7333],[25.1606,121.7345],[25.1613,121.7325],[25.1558,121.724],[25.152,121.7213],[25.1568,121.7186],[25.1565,121.7161],[25.1524,121.7157],[25.1514,121.7126],[25.1458,121.7199],[25.1417,121.7133],[25.142,121.7117],[25.1506,121.7089],[25.1499,121.7058],[25.1463,121.7058],[25.1443,121.7081],[25.144,121.7032],[25.1567,121.698],[25.1626,121.7024],[25.1624,121.6901],[25.1587,121.6902],[25.1552,121.6932],[25.1521,121.6935],[25.1479,121.698],[25.1437,121.6968],[25.1437,121.6956],[25.1363,121.6953],[25.1335,121.6978],[25.1291,121.7102],[25.1231,121.7112],[25.1118,121.7188],[25.1101,121.7149],[25.1134,121.7136],[25.1139,121.7088],[25.1098,121.7061],[25.1062,121.7113],[25.1006,121.7044],[25.0976,121.7062],[25.0968,121.7002],[25.0889,121.6955],[25.0859,121.6829],[25.0757,121.6792],[25.0785,121.6753],[25.0768,121.6751],[25.078,121.6749],[25.0803,121.6768],[25.0825,121.6746],[25.0852,121.6751],[25.0873,121.6772],[25.0885,121.6681],[25.0916,121.6694],[25.0936,121.6667],[25.091,121.6633],[25.0844,121.6683],[25.0798,121.6617],[25.0769,121.6652],[25.0736,121.6516],[25.0757,121.6501],[25.0793,121.6515],[25.0797,121.6496],[25.0843,121.6514],[25.0889,121.6485],[25.0888,121.6502],[25.0905,121.6503],[25.0927,121.6473],[25.0923,121.6456],[25.0904,121.6461],[25.0905,121.6441],[25.0886,121.644],[25.088,121.6465],[25.0825,121.6482],[25.0808,121.6467],[25.0822,121.6445],[25.0779,121.6406],[25.0851,121.6385],[25.0852,121.6355],[25.0837,121.6343],[25.082,121.6368],[25.0767,121.6372],[25.0714,121.6313],[25.0715,121.6265],[25.0729,121.6253],[25.0776,121.628],[25.0741,121.6334],[25.0752,121.6345],[25.0786,121.6304],[25.0826,121.6291],[25.0803,121.6264],[25.0765,121.6076],[25.0819,121.6076],[25.085,121.6047],[25.0867,121.6059],[25.0905,121.6008],[25.0878,121.5939],[25.09,121.5936],[25.0907,121.5909],[25.0896,121.5882],[25.0906,121.5832],[25.0884,121.5831],[25.0875,121.5869],[25.0862,121.5868],[25.0866,121.5827],[25.0853,121.5812],[25.0905,121.5658],[25.0888,121.5633],[25.0914,121.5614],[25.0916,121.5596],[25.0888,121.5594],[25.0864,121.5506],[25.0858,121.54],[25.0881,121.5406],[25.0887,121.537],[25.08,121.5302],[25.081,121.5254],[25.0858,121.5297],[25.0943,121.5333],[25.0962,121.5368],[25.0956,121.5434],[25.0925,121.5466],[25.0932,121.5487],[25.1006,121.5534],[25.1032,121.5577],[25.1068,121.5584],[25.1047,121.566],[25.107,121.5706],[25.1097,121.5707],[25.1078,121.5684],[25.1085,121.5649],[25.1125,121.5667],[25.1136,121.5615],[25.1125,121.5577],[25.1155,121.5562],[25.1158,121.5605],[25.1273,121.5686],[25.126,121.5733],[25.1235,121.5698],[25.1198,121.5711],[25.1218,121.5749],[25.1225,121.5733],[25.1309,121.5797],[25.1348,121.5795],[25.1361,121.5745],[25.1388,121.5718],[25.144,121.571],[25.1463,121.567],[25.1499,121.5649],[25.1545,121.5673],[25.1575,121.564],[25.1583,121.5574],[25.1524,121.5515],[25.1575,121.5422],[25.1742,121.5404],[25.1748,121.5437],[25.1795,121.544],[25.1779,121.5366],[25.1852,121.5351],[25.1776,121.5277],[25.1739,121.5277],[25.1685,121.5327],[25.1638,121.5333],[25.1533,121.5255],[25.1487,121.5103],[25.1609,121.5047],[25.1694,121.5108],[25.1722,121.5032],[25.1623,121.4956],[25.1456,121.5027],[25.1462,121.4985],[25.1446,121.4977],[25.1472,121.4972],[25.1483,121.4941],[25.1446,121.4919],[25.144,121.4888],[25.1423,121.4884],[25.1401,121.483],[25.139,121.484],[25.1362,121.4774],[25.1296,121.4688],[25.1347,121.4733],[25.1369,121.4711],[25.1334,121.4665],[25.14,121.4656],[25.1458,121.4616],[25.1479,121.4636],[25.148,121.462],[25.1493,121.4622],[25.1497,121.4645],[25.1519,121.4652],[25.1548,121.4615],[25.1567,121.464],[25.162,121.4618],[25.1636,121.4627],[25.1638,121.4609],[25.1659,121.4599],[25.1671,121.4621],[25.1699,121.4617],[25.1756,121.459],[25.1792,121.4551],[25.1825,121.458],[25.1836,121.4523],[25.1874,121.4538],[25.1893,121.4503],[25.1968,121.4464],[25.2,121.4559],[25.2017,121.4558],[25.2027,121.4515],[25.2059,121.4527],[25.2056,121.4544],[25.2079,121.4543],[25.2091,121.4517],[25.2142,121.452],[25.2155,121.4547],[25.2195,121.4522],[25.2235,121.4523],[25.2241,121.4555],[25.2272,121.4569],[25.2289,121.449],[25.2264,121.4488],[25.2266,121.4472],[25.225,121.4465],[25.2228,121.451],[25.2182,121.4477],[25.218,121.4496],[25.2147,121.4497],[25.214,121.4448],[25.2121,121.4449],[25.2131,121.4396],[25.2108,121.4371],[25.2053,121.4408],[25.2018,121.44],[25.2043,121.4363],[25.2047,121.4313],[25.2005,121.4281],[25.2013,121.4258],[25.196,121.4241],[25.1954,121.4258],[25.1917,121.4247],[25.1938,121.421],[25.1929,121.4191],[25.1908,121.4209],[25.1919,121.422],[25.191,121.4254],[25.1885,121.4258],[25.1889,121.4202],[25.1841,121.4144],[25.1856,121.4103],[25.1842,121.4105],[25.1838,121.4136],[25.1819,121.4131],[25.181,121.4178],[25.1771,121.42],[25.1743,121.4321],[25.1658,121.4453],[25.1666,121.447],[25.1599,121.4528],[25.1581,121.4577],[25.1353,121.4591],[25.1317,121.4578],[25.1152,121.4649],[25.1151,121.4723],[25.1131,121.4778],[25.1157,121.4912],[25.1099,121.4781],[25.1106,121.4667],[25.1088,121.4661],[25.1016,121.4855],[25.097,121.4922],[25.0951,121.4893],[25.1024,121.46],[25.09,121.4543],[25.0806,121.4526],[25.076,121.4549],[25.0673,121.4666],[25.0656,121.4655],[25.0742,121.453],[25.08,121.4487],[25.0909,121.4479],[25.1019,121.4536],[25.1059,121.4528],[25.1066,121.456],[25.1084,121.454],[25.1058,121.4499],[25.1069,121.4471],[25.1052,121.4471],[25.1049,121.4457],[25.1065,121.4409],[25.1047,121.4406],[25.1046,121.4375],[25.1063,121.4373],[25.1083,121.4315],[25.1101,121.4301],[25.1085,121.4285],[25.1067,121.4293],[25.1034,121.4337],[25.1032,121.4376],[25.1012,121.4387],[25.1023,121.4487],[25.1003,121.4477],[25.0995,121.4492],[25.0927,121.4432],[25.0958,121.4404],[25.0893,121.4403],[25.0881,121.4389],[25.0915,121.4387],[25.0934,121.4273],[25.0978,121.4237],[25.0987,121.4197],[25.0962,121.4189],[25.0944,121.4217],[25.09,121.4234],[25.09,121.4268],[25.0857,121.4303],[25.0834,121.4351],[25.0683,121.4229],[25.0663,121.4189],[25.0616,121.4209],[25.0637,121.4268],[25.0622,121.4307],[25.06,121.4268],[25.0567,121.4259],[25.0557,121.4287],[25.0555,121.4266],[25.0532,121.4278],[25.0537,121.4223],[25.0511,121.4203],[25.0513,121.418],[25.0544,121.417],[25.0548,121.4146],[25.0516,121.4098],[25.0457,121.4113],[25.0481,121.4076],[25.0477,121.4058],[25.0441,121.405],[25.042,121.4119],[25.047,121.417],[25.0489,121.4172],[25.0492,121.4205],[25.0526,121.4232],[25.0511,121.4263],[25.0441,121.4233],[25.0454,121.4207],[25.0452,121.4184],[25.0438,121.4176],[25.0392,121.4177],[25.0376,121.4218],[25.0341,121.4174],[25.0322,121.418],[25.0313,121.4137],[25.0373,121.4104],[25.0403,121.4028],[25.0389,121.4019],[25.0367,121.4088],[25.0336,121.4091],[25.0341,121.406],[25.0327,121.406],[25.0321,121.4093],[25.0294,121.4119],[25.0293,121.4046],[25.0311,121.3994],[25.0299,121.3993],[25.028,121.4037],[25.0274,121.4116],[25.0256,121.411],[25.0227,121.4078],[25.0215,121.4086],[25.0192,121.3973],[25.0163,121.3977],[25.0159,121.3993],[25.0153,121.3923],[25.0121,121.3911],[25.0079,121.3979],[25.0151,121.4072],[25.0143,121.4096],[25.0124,121.4116],[25.0083,121.4095],[25.0072,121.4111],[25.0046,121.4112],[25.0065,121.4077],[25.0062,121.4059],[25.0039,121.405],[25.0009,121.4074],[25.0017,121.4117],[24.9981,121.4127],[24.9991,121.4159],[24.9965,121.414],[24.9952,121.4198],[24.9875,121.4142],[24.9894,121.4119],[24.9917,121.4129],[24.9921,121.4117],[24.9902,121.4103],[24.991,121.4083],[24.9897,121.4049],[24.9872,121.4119],[24.9814,121.4093],[24.9753,121.4011],[24.9724,121.3924],[24.9674,121.3854],[24.9627,121.3892],[24.9548,121.375],[24.9596,121.373],[24.9574,121.3639],[24.9592,121.3536],[24.9583,121.3462],[24.9646,121.3448],[24.9668,121.3513],[24.9678,121.3469],[24.9717,121.3496],[24.9682,121.3535],[24.9697,121.3601],[24.9739,121.3611],[24.9756,121.3594],[24.9728,121.3565],[24.9808,121.3524],[24.9788,121.3472],[24.9823,121.3427],[24.9802,121.341],[24.9807,121.3368],[24.9787,121.3338],[24.9785,121.3274],[24.9762,121.3286],[24.9725,121.3233],[24.971,121.324],[24.9728,121.3279],[24.9717,121.3284],[24.9696,121.3288],[24.9664,121.3268],[24.9678,121.3287],[24.9667,121.3297],[24.9654,121.3281],[24.9607,121.3293],[24.9491,121.328],[24.9457,121.3316],[24.9434,121.3243],[24.9385,121.3158]],"holes":[[[24.9583,121.5388],[24.9578,121.5398],[24.9587,121.5417],[24.9538,121.5429],[24.9534,121.5444],[24.9528,121.547],[24.9525,121.5491],[24.9536,121.5504],[24.9536,121.5505],[24.9534,121.5488],[24.9541,121.5478],[24.9556,121.5467],[24.9563,121.5476],[24.9573,121.5486],[24.9585,121.549],[24.9592,121.5471],[24.9636,121.5454],[24.9609,121.5433],[24.9597,121.5415],[24.9587,121.5396],[24.9583,121.5388]],[[25.0726,121.6665],[25.0723,121.6669],[25.0719,121.6669],[25.0719,121.6673],[25.0719,121.6676],[25.0718,121.668],[25.0716,121.6683],[25.0712,121.6685],[25.071,121.6686],[25.0709,121.6688],[25.0709,121.6693],[25.0709,121.6696],[25.0708,121.6699],[25.0705,121.6703],[25.0704,121.6705],[25.0699,121.671],[25.0694,121.6715],[25.0692,121.6722],[25.0681,121.673],[25.0742,121.6734],[25.0753,121.6741],[25.0749,121.6734],[25.077,121.6718],[25.0755,121.6673],[25.0754,121.667],[25.0738,121.6667],[25.0731,121.6666],[25.0726,121.6665]],[[25.1313,121.5068],[25.1309,121.5078],[25.1301,121.509],[25.1296,121.5106],[25.1283,121.5126],[25.1279,121.5127],[25.1296,121.5137],[25.1306,121.5131],[25.1314,121.5113],[25.1326,121.5115],[25.1322,121.5143],[25.1314,121.5156],[25.1298,121.5159],[25.1299,121.5166],[25.1296,121.5173],[25.1288,121.5177],[25.1281,121.5175],[25.127,121.5162],[25.1264,121.5134],[25.1264,121.5134],[25.1256,121.5149],[25.1239,121.5185],[25.1349,121.5285],[25.137,121.5275],[25.1376,121.5274],[25.1378,121.5274],[25.1381,121.5274],[25.1382,121.5275],[25.1384,121.5277],[25.139,121.5278],[25.1399,121.5281],[25.14,121.5278],[25.1409,121.5276],[25.1409,121.5278],[25.1413,121.5289],[25.1422,121.5277],[25.1424,121.5274],[25.1431,121.5109],[25.1429,121.5109],[25.1428,121.5122],[25.1424,121.5147],[25.1419,121.5152],[25.1413,121.5159],[25.1395,121.5145],[25.1399,121.5152],[25.1386,121.5185],[25.1373,121.5188],[25.1366,121.5177],[25.1352,121.516],[25.1361,121.5147],[25.1354,121.5117],[25.1352,121.5105],[25.1352,121.5087],[25.1353,121.5072],[25.1337,121.5084],[25.1319,121.5074],[25.1313,121.5068]]],"new":[[[24.9262,121.4964],[24.9234,121.4979],[24.9237,121.5015],[24.9259,121.5057],[24.9295,121.5099],[24.9307,121.5104],[24.9303,121.5143],[24.93,121.5183],[24.9324,121.5185],[24.936,121.5137],[24.9392,121.5121],[24.9383,121.5091],[24.9361,121.5069],[24.9377,121.5043],[24.9402,121.5069],[24.9455,121.5056],[24.9442,121.5021],[24.9399,121.501],[24.9384,121.5001],[24.937,121.5028],[24.9349,121.5048],[24.9317,121.5031],[24.9294,121.4978],[24.9262,121.4964]],[[24.9822,121.476],[24.9778,121.4803],[24.9735,121.4809],[24.9675,121.4829],[24.9663,121.4864],[24.9678,121.4899],[24.9705,121.4935],[24.9722,121.4923],[24.9751,121.4956],[24.9711,121.4975],[24.9714,121.502],[24.979,121.5063],[24.9878,121.4797],[24.9822,121.476]],[[25.0098,121.3732],[25.0073,121.3748],[25.0046,121.3772],[25.0055,121.3796],[25.0053,121.3831],[25.0058,121.3863],[25.0073,121.3935],[25.0107,121.3935],[25.0121,121.3913],[25.0133,121.3951],[25.011,121.3979],[25.0121,121.4015],[25.0137,121.4028],[25.0163,121.4019],[25.019,121.3974],[25.0179,121.3971],[25.0174,121.3946],[25.0167,121.3934],[25.0179,121.3908],[25.0186,121.3906],[25.0198,121.3915],[25.0202,121.3898],[25.0216,121.3877],[25.021,121.3866],[25.0178,121.3896],[25.0174,121.3884],[25.0162,121.3885],[25.0156,121.3914],[25.0146,121.3912],[25.014,121.3884],[25.0129,121.3879],[25.0125,121.3862],[25.0124,121.3826],[25.0117,121.3802],[25.0123,121.377],[25.0128,121.3735],[25.0098,121.3732]],[[25.0299,121.3993],[25.028,121.4037],[25.0276,121.4132],[25.0305,121.4145],[25.0329,121.4122],[25.0373,121.4104],[25.0392,121.4079],[25.0403,121.4028],[25.0389,121.4019],[25.0379,121.4041],[25.0374,121.4073],[25.0367,121.4088],[25.0336,121.4091],[25.0341,121.406],[25.0327,121.406],[25.0321,121.4093],[25.0292,121.4122],[25.0293,121.4046],[25.0311,121.3994],[25.0299,121.3993]],[[24.9397,121.5394],[24.9305,121.5395],[24.928,121.543],[24.928,121.5459],[24.927,121.5432],[24.9212,121.5414],[24.9195,121.5431],[24.9184,121.5455],[24.9194,121.5486],[24.9205,121.5517],[24.9223,121.5511],[24.9246,121.5492],[24.9267,121.5481],[24.9281,121.5508],[24.929,121.5544],[24.9301,121.5569],[24.9279,121.5615],[24.9293,121.564],[24.932,121.5626],[24.9344,121.5583],[24.936,121.5543],[24.9346,121.55],[24.9351,121.5473],[24.9374,121.548],[24.9407,121.5416],[24.9397,121.5394]],[[24.98,121.5554],[24.9716,121.559],[24.967,121.5616],[24.9651,121.5653],[24.9653,121.572],[24.9674,121.576],[24.9657,121.5818],[24.965,121.5848],[24.965,121.5898],[24.9629,121.5964],[24.9637,121.5984],[24.966,121.6003],[24.9684,121.597],[24.9703,121.5986],[24.9687,121.6037],[24.972,121.6046],[24.9741,121.6032],[24.9756,121.5926],[24.9773,121.5866],[24.9814,121.5829],[24.9847,121.5812],[24.9853,121.5773],[24.9853,121.5747],[24.98,121.5554]],[[25.1312,121.5403],[25.1185,121.5439],[25.1154,121.5549],[25.1158,121.5605],[25.1194,121.564],[25.1237,121.5665],[25.1273,121.5686],[25.1262,121.5709],[25.126,121.5733],[25.1235,121.5698],[25.1198,121.5711],[25.1203,121.5728],[25.1216,121.5735],[25.1218,121.5749],[25.1224,121.5749],[25.1225,121.5733],[25.1247,121.5754],[25.1257,121.575],[25.1269,121.5767],[25.1309,121.5797],[25.1348,121.5795],[25.1361,121.5745],[25.1388,121.5718],[25.144,121.571],[25.1463,121.567],[25.1499,121.5649],[25.1545,121.5673],[25.1575,121.564],[25.1583,121.5574],[25.1537,121.5526],[25.1438,121.5441],[25.1312,121.5403]]]};
+
+var map, geocoder, infoWindow, queryMarker, taipeiPoly, uberPolys = [];
+var radiusKm = 5;
+
+// ───────── 工具 ─────────
+function haversineKm(aLat, aLng, bLat, bLng) {
+  var R = 6371.0088, toRad = Math.PI / 180;
+  var dLat = (bLat - aLat) * toRad, dLng = (bLng - aLng) * toRad;
+  var s = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(aLat * toRad) * Math.cos(bLat * toRad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+function inTaipei(lat, lng) {
+  var ring = TAIPEI[0][0], c = false;
+  for (var i = 0; i < ring.length - 1; i++) {
+    var a = ring[i], b = ring[i + 1];
+    if ((a[1] > lng) !== (b[1] > lng) && lat < (b[0] - a[0]) * (lng - a[1]) / (b[1] - a[1]) + a[0]) c = !c;
+  }
+  return c;
+}
+function inRing(lat, lng, ring) {
+  var c = false;
+  for (var i = 0; i < ring.length - 1; i++) {
+    var a = ring[i], b = ring[i + 1];
+    if ((a[1] > lng) !== (b[1] > lng) && lat < (b[0] - a[0]) * (lng - a[1]) / (b[1] - a[1]) + a[0]) c = !c;
+  }
+  return c;
+}
+function inUber(lat, lng) {
+  if (UBER["new"].some(function (r) { return inRing(lat, lng, r); })) return true;
+  return inRing(lat, lng, UBER.main) && !UBER.holes.some(function (r) { return inRing(lat, lng, r); });
+}
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
+}
+function showErr(msg) {
+  var e = document.getElementById("err");
+  e.textContent = msg; e.style.display = msg ? "block" : "none";
+}
+function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
+
+// ───────── 側欄 ─────────
+function whMsg(kind, text) {
+  var el = document.getElementById("whMsg");
+  el.className = kind || ""; el.textContent = text || "";
+}
+function nextColor() {
+  var used = WAREHOUSES.map(function (w) { return w.color; });
+  for (var i = 0; i < PALETTE.length; i++) if (used.indexOf(PALETTE[i]) < 0) return PALETTE[i];
+  return PALETTE[WAREHOUSES.length % PALETTE.length];
+}
+function addrText(w) { return w.addr || w.lat.toFixed(5) + ", " + w.lng.toFixed(5); }   // 沒有地址時顯示座標
+function shortLabel(name) { return Array.from(name).slice(0, 2).join(""); }
+
+// 把一個門市倉畫到地圖上（地圖還沒載入時先略過，載入後會統一補畫）
+function mountWarehouse(w) {
+  if (!map || w.marker) return;
+  var pos = { lat: w.lat, lng: w.lng };
+  w.marker = new google.maps.Marker({
+    map: map, position: pos, title: w.name + "｜" + addrText(w), visible: w.visible,
+    label: { text: shortLabel(w.name), color: "#fff", fontSize: "11px", fontWeight: "700" },
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 17, fillColor: w.color, fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 }
+  });
+  w.circle = new google.maps.Circle({
+    map: map, center: pos, radius: radiusKm * 1000, visible: w.visible,
+    strokeColor: w.color, strokeOpacity: 0.9, strokeWeight: 2,
+    fillColor: w.color, fillOpacity: 0.06, clickable: false
+  });
+  w.marker.addListener("click", function () { openInfo(w); });
+}
+function unmountWarehouse(w) {
+  if (w.marker) { w.marker.setMap(null); w.marker = null; }
+  if (w.circle) { w.circle.setMap(null); w.circle = null; }
+}
+
+function addWarehouse(name, addr, lat, lng, quiet) {
+  var w = { name: name || "門市倉 " + (WAREHOUSES.length + 1), addr: addr || "",
+            lat: lat, lng: lng, color: nextColor(), visible: true };
+  WAREHOUSES.push(w);
+  mountWarehouse(w);
+  if (!quiet) afterListChange(w);
+  return w;
+}
+function removeWarehouse(w) {
+  unmountWarehouse(w);
+  WAREHOUSES.splice(WAREHOUSES.indexOf(w), 1);
+  afterListChange();
+}
+function afterListChange(focus) {
+  saveWarehouses();
+  renderList();
+  recomputeZones();
+  refreshResult();
+  if (focus && map) map.panTo({ lat: focus.lat, lng: focus.lng });
+}
+
+function renderList() {
+  var box = document.getElementById("whList");
+  box.innerHTML = "";
+  if (!WAREHOUSES.length) {
+    box.innerHTML = '<div class="wh-empty">還沒有門市倉。在上方輸入地址或座標新增第一個，圓形範圍和分區會跟著出現。</div>';
+    return;
+  }
+  WAREHOUSES.forEach(function (w) {
+    var row = document.createElement("div");
+    row.className = "wh";
+    row.innerHTML =
+      '<input type="checkbox"' + (w.visible ? " checked" : "") + ' aria-label="顯示 ' + esc(w.name) + '">' +
+      '<span class="dot" style="background:' + w.color + '"></span>' +
+      '<div class="wh-main"><div class="wh-name">' + esc(w.name) + '</div>' +
+      '<div class="wh-addr" title="' + esc(addrText(w)) + '">' + esc(addrText(w)) + "</div></div>" +
+      '<button type="button" class="wh-del" aria-label="移除 ' + esc(w.name) + '">移除</button>';
+    row.querySelector("input").addEventListener("change", function (e) {
+      w.visible = e.target.checked;
+      if (w.marker) { w.marker.setVisible(w.visible); w.circle.setVisible(w.visible); }
+      saveWarehouses();
+      recomputeZones();
+      refreshResult();
+    });
+    row.querySelector(".wh-main").addEventListener("click", function () {
+      if (map) { map.panTo({ lat: w.lat, lng: w.lng }); openInfo(w); }
+    });
+    row.querySelector(".wh-del").addEventListener("click", function () { removeWarehouse(w); });
+    box.appendChild(row);
+  });
+}
+
+// 解析「緯度, 經度」文字；不是座標就回傳 null
+function parseLatLng(a, b) {
+  var lat = parseFloat(a), lng = parseFloat(b);
+  if (!/^\s*-?\d+(\.\d+)?\s*$/.test(a) || !/^\s*-?\d+(\.\d+)?\s*$/.test(b)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat: lat, lng: lng };
+}
+// 用 Google 把地址轉成座標，需要地圖已載入且 Key 啟用 Geocoding API
+function geocodeAddress(address, done) {
+  if (!geocoder) { done(null, "地址轉座標需要先載入地圖。也可以直接輸入座標，例如 25.0478, 121.5170。"); return; }
+  geocoder.geocode({ address: address, region: "TW" }, function (res, status) {
+    if (status !== "OK" || !res.length) {
+      done(null, "找不到「" + address + "」（" + status + "）。" + (status === "REQUEST_DENIED" ? "這把 Key 還沒啟用 Geocoding API。" : ""));
+      return;
+    }
+    done({ lat: res[0].geometry.location.lat(), lng: res[0].geometry.location.lng() });
+  });
+}
+
+function submitWarehouse() {
+  var name = document.getElementById("whName").value.trim(), text = document.getElementById("whAddr").value.trim();
+  if (!text) { whMsg("error", "請輸入地址或座標，或改在地圖上點選位置。"); return; }
+  var parts = text.split(/[,，]/), ll = parts.length === 2 ? parseLatLng(parts[0], parts[1]) : null;
+  var finish = function (pos, addr) {
+    addWarehouse(name, addr, pos.lat, pos.lng);
+    document.getElementById("whName").value = ""; document.getElementById("whAddr").value = "";
+    whMsg("", "");
+  };
+  if (ll) { finish(ll, ""); return; }
+  whMsg("info", "查詢地址中…");
+  geocodeAddress(text, function (pos, err) { if (err) whMsg("error", err); else finish(pos, text); });
+}
+
+// 批次貼上：逐行處理，有座標的直接加入，只有地址的依序向 Google 查詢
+function bulkAdd() {
+  var lines = document.getElementById("whBulkText").value.split(/\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+  if (!lines.length) { whMsg("error", "請先貼上內容，一行一個門市倉。"); return; }
+  var added = 0, failed = [], i = 0, last = null;
+  var next = function () {
+    if (i >= lines.length) {
+      afterListChange(last);
+      if (added) document.getElementById("whBulkText").value = failed.join("\n");
+      whMsg(failed.length ? "error" : "info", "已加入 " + added + " 個" + (failed.length ? "，" + failed.length + " 行沒有成功，留在上方供修改。" : "。"));
+      return;
+    }
+    var line = lines[i++], p = line.split(/[,，\t]/).map(function (s) { return s.trim(); });
+    var ll = p.length >= 3 ? parseLatLng(p[1], p[2]) : null;
+    if (ll) { last = addWarehouse(p[0], p.slice(3).join(", "), ll.lat, ll.lng, true); added++; next(); return; }
+    var name = p.length >= 2 ? p[0] : "", address = p.length >= 2 ? p.slice(1).join("") : p[0];
+    geocodeAddress(address, function (pos) {
+      if (pos) { last = addWarehouse(name, address, pos.lat, pos.lng, true); added++; } else { failed.push(line); }
+      next();
+    });
+  };
+  whMsg("info", "處理中…");
+  next();
+}
+
+// 在地圖上點選新增
+var pickMode = false;
+function setPickMode(on) {
+  if (on && !map) { whMsg("error", "要在地圖上點選，需要先載入地圖。"); return; }
+  pickMode = on;
+  document.getElementById("pickBanner").hidden = !on;
+  document.getElementById("whPick").textContent = on ? "取消地圖點選" : "改在地圖上點選";
+  if (map) map.setOptions({ draggableCursor: on ? "crosshair" : null });
+  if (on) whMsg("", "");
+}
+
+var lastPoint = null;
+function refreshResult() { if (lastPoint) showResult(lastPoint.lat, lastPoint.lng, lastPoint.label); }
+
+function showResult(lat, lng, label) {
+  lastPoint = { lat: lat, lng: lng, label: label };
+  var rows = WAREHOUSES.filter(function (w) { return w.visible; }).map(function (w) {
+    return { w: w, d: haversineKm(lat, lng, w.lat, w.lng) };
+  }).sort(function (a, b) { return a.d - b.d; });
+
+  var el = document.getElementById("result");
+  document.getElementById("resultCard").style.display = "block";
+  if (!rows.length) { el.textContent = "目前沒有勾選任何門市倉。"; return; }
+
+  var covered = rows.filter(function (r) { return r.d <= radiusKm; });
+  var html = "";
+  if (label) html += '<div class="meta">' + esc(label) + "</div>";
+  html += '<div class="meta">' + (inTaipei(lat, lng) ? "位於台北市內" : "位於台北市外") + "｜" +
+          (inUber(lat, lng) ? "Uber Eats 有服務" : '<span style="color:#b42318">Uber Eats 不服務</span>') + "</div>";
+  if (inTaipei(lat, lng) && rows.length) {
+    var zk = !inUber(lat, lng) ? "C" : (rows[0].d <= radiusKm ? "A" : "B");
+    html += '<div class="meta"><span class="sw" style="vertical-align:-1px;background:' + ZONES[zk].color + '"></span> ' + ZONES[zk].name + "</div>";
+  }
+  if (covered.length) {
+    html += '<div class="verdict">在覆蓋範圍內，指派 ' + esc(rows[0].w.name) + "（" + rows[0].d.toFixed(2) + " km）</div>";
+  } else {
+    html += '<div class="verdict bad">不在任何倉的 ' + radiusKm.toFixed(1) + " km 範圍內</div>" +
+            "<div>最近的是 " + esc(rows[0].w.name) + "，超出 " + (rows[0].d - radiusKm).toFixed(2) + " km</div>";
+  }
+  html += "<table>";
+  rows.forEach(function (r) {
+    html += "<tr><td><span class='" + (r.d <= radiusKm ? "in" : "out") + "'>" + (r.d <= radiusKm ? "●" : "○") + "</span> " +
+            esc(r.w.name) + "</td><td>" + r.d.toFixed(2) + " km</td></tr>";
+  });
+  html += "</table>";
+  el.innerHTML = html;
+}
+
+// ───────── 地圖 ─────────
+function openInfo(w) {
+  infoWindow.setContent(
+    '<div style="font-size:14px;line-height:1.6"><strong>' + esc(w.name) + "</strong><br>" + esc(addrText(w)) +
+    "</div>");
+  infoWindow.open({ map: map, anchor: w.marker });
+}
+
+function placeQuery(lat, lng, label) {
+  var pos = { lat: lat, lng: lng };
+  if (!queryMarker) {
+    queryMarker = new google.maps.Marker({
+      map: map, position: pos, zIndex: 999,
+      icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: "#111827", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 3 }
+    });
+  } else { queryMarker.setPosition(pos); }
+  showResult(lat, lng, label);
+}
+
+// Google Maps 載入完成後的 callback
+window.initMap = function () {
+  mapsReady = true;
+  clearTimeout(loadTimer);
+  document.getElementById("onboard").style.display = "none";
+  showKeyStatus();
+  map = new google.maps.Map(document.getElementById("map"), {
+    center: { lat: 25.055, lng: 121.545 }, zoom: 12,
+    mapTypeControl: false, streetViewControl: false, fullscreenControl: false, clickableIcons: false,
+    // 降低底圖彩度並隱藏地標圖示，讓分區顏色不會被底圖的綠色山區和藍色水域干擾
+    styles: [
+      { stylers: [{ saturation: -80 }, { lightness: 15 }] },
+      { featureType: "poi", stylers: [{ visibility: "off" }] },
+      { featureType: "transit", elementType: "labels.icon", stylers: [{ visibility: "off" }] }
+    ]
+  });
+  geocoder = new google.maps.Geocoder();
+  infoWindow = new google.maps.InfoWindow();
+
+  taipeiPoly = new google.maps.Polygon({
+    map: map, clickable: false, zIndex: 1,
+    paths: TAIPEI[0].map(function (ring) { return ring.map(function (p) { return { lat: p[0], lng: p[1] }; }); }),
+    strokeColor: "#111827", strokeOpacity: 0.9, strokeWeight: 2.5,
+    fillColor: "#111827", fillOpacity: 0,
+    visible: document.getElementById("tpeToggle").checked
+  });
+
+  var toPath = function (ring) { return ring.map(function (p) { return { lat: p[0], lng: p[1] }; }); };
+  var uberOn = document.getElementById("uberToggle").checked;
+  uberPolys.push(new google.maps.Polygon({
+    map: map, clickable: false, zIndex: 0, visible: uberOn,
+    paths: [toPath(UBER.main)].concat(UBER.holes.map(toPath)),
+    strokeColor: "#6d28d9", strokeOpacity: 0.95, strokeWeight: 2,
+    fillColor: "#7c3aed", fillOpacity: 0.18
+  }));
+  UBER["new"].forEach(function (ring) {
+    uberPolys.push(new google.maps.Polygon({
+      map: map, clickable: false, zIndex: 0, visible: uberOn, paths: toPath(ring),
+      strokeColor: "#4c1d95", strokeOpacity: 0.95, strokeWeight: 2,
+      fillColor: "#4c1d95", fillOpacity: 0.35
+    }));
+  });
+
+  var bounds = new google.maps.LatLngBounds();
+  TAIPEI[0][0].forEach(function (p) { bounds.extend({ lat: p[0], lng: p[1] }); });
+  WAREHOUSES.forEach(function (w) {
+    mountWarehouse(w);
+    bounds.extend({ lat: w.lat, lng: w.lng });
+  });
+  map.fitBounds(bounds, 30);
+  drawZones();
+
+  map.addListener("click", function (e) {
+    if (pickMode) {
+      var nameEl = document.getElementById("whName");
+      addWarehouse(nameEl.value.trim(), "", e.latLng.lat(), e.latLng.lng());
+      nameEl.value = "";
+      setPickMode(false);
+      return;
+    }
+    placeQuery(e.latLng.lat(), e.latLng.lng(), "點選位置 " + e.latLng.lat().toFixed(5) + ", " + e.latLng.lng().toFixed(5));
+  });
+};
+
+// ───────── API Key 流程 ─────────
+// 流程：沒有 Key → 顯示引導畫面 → 使用者貼上 → 檢查格式 → 載入 Google Maps
+//       成功：收起引導畫面，側欄顯示 Key 末四碼，可更換或清除
+//       失敗：回到引導畫面並說明原因。Google Maps 的程式一個頁面只能載入一次，所以換 Key 時會重新整理頁面。
+// Key 的存放：勾選「記住」存 localStorage（下次開啟仍在），否則存 sessionStorage（關閉分頁即清除）。兩者都只在本機。
+var KEY_NAME = "coverage_gmaps_key";
+// 從網站開啟時，建議把 Key 限制成只有這個網站能用；從電腦直接開檔案時則不能設網站限制
+var HOSTED = /^https?:$/.test(location.protocol);
+if (HOSTED) {
+  document.getElementById("refTip").innerHTML = "應用程式限制：選「網站」，新增 <code>" + esc(location.origin) + "/*</code>。這樣 Key 就算外流，別的網站也用不了。";
+}
+var mapsRequested = false, mapsReady = false, loadTimer = null;
+
+function readKey() {
+  try {
+    var legacy = localStorage.getItem("ns_" + KEY_NAME);        // 舊版本存的 Key，搬到新名稱後刪除
+    if (legacy) { localStorage.setItem(KEY_NAME, legacy); localStorage.removeItem("ns_" + KEY_NAME); }
+    return sessionStorage.getItem(KEY_NAME) || localStorage.getItem(KEY_NAME) || "";
+  } catch (e) { return ""; }
+}
+function saveKey(key, remember) {
+  try {
+    sessionStorage.removeItem(KEY_NAME); localStorage.removeItem(KEY_NAME);
+    (remember ? localStorage : sessionStorage).setItem(KEY_NAME, key);
+    return true;
+  } catch (e) { return false; }
+}
+function forgetKey() {
+  try { sessionStorage.removeItem(KEY_NAME); localStorage.removeItem(KEY_NAME); } catch (e) {}
+}
+function obMsg(kind, html) {
+  var el = document.getElementById("obMsg");
+  el.className = kind || ""; el.innerHTML = html || "";
+}
+function setLoading(on) {
+  var b = document.getElementById("keyBtn");
+  b.disabled = on; b.textContent = on ? "載入中…" : "載入地圖";
+}
+function showOnboard() {
+  document.getElementById("onboard").style.display = "flex";
+  document.getElementById("keyStatus").style.display = "none";
+  setLoading(false);
+}
+function showKeyStatus() {
+  var k = readKey() || currentKey || "";
+  document.getElementById("keyTail").textContent = k ? "••••" + k.slice(-4) : "（未儲存）";
+  document.getElementById("keyStatus").style.display = "block";
+}
+
+// Key 無效、API 未啟用、未綁帳單或來源被限制時，Google 會呼叫這個函式
+window.gm_authFailure = function () {
+  clearTimeout(loadTimer);
+  forgetKey();
+  showOnboard();
+  obMsg("error", "Google 拒絕了這把 Key，已經把它從這個瀏覽器清除。常見原因：<ul>" +
+    "<li>Key 貼錯或少了字元</li>" +
+    "<li>專案還沒啟用 Maps JavaScript API</li>" +
+    "<li>專案沒有綁定帳單帳戶</li>" +
+    "<li>" + (HOSTED ? "Key 的網站限制沒有包含目前的網址 " + esc(location.origin) + "/*" : "Key 設了網站來源限制（直接開啟本機檔案時會被擋，請改成「無」）") + "</li></ul>" +
+    "修正後重新貼上，頁面會自動重新整理。");
+};
+
+var currentKey = "";
+function loadMaps(key) {
+  currentKey = key;
+  mapsRequested = true;
+  setLoading(true);
+  obMsg("", "");
+  var s = document.createElement("script");
+  s.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(key) +
+          "&callback=initMap&language=zh-TW&region=TW&loading=async";
+  s.async = true;
+  var fail = function () {
+    if (mapsReady) return;
+    clearTimeout(loadTimer);
+    mapsRequested = false;                       // 程式沒載到，可以直接再試一次，不必重新整理
+    if (s.parentNode) s.parentNode.removeChild(s);
+    showOnboard();
+    obMsg("error", "連不到 Google Maps，Key 還沒有被驗證。請檢查：<ul>" +
+      "<li>是不是在聊天視窗或預覽畫面裡開啟？請下載檔案，改用 Chrome 或 Safari 開啟</li>" +
+      "<li>公司網路或 VPN 是否擋了 maps.googleapis.com</li>" +
+      "<li>廣告阻擋外掛是否攔截，可改用無痕視窗測試</li></ul>");
+  };
+  s.onerror = fail;
+  loadTimer = setTimeout(fail, 15000);
+  document.head.appendChild(s);
+}
+
+function submitKey(force) {
+  var key = document.getElementById("keyInput").value.replace(/\s+/g, "");
+  var remember = document.getElementById("keyRemember").checked;
+  if (!key) { obMsg("error", "請先貼上 API Key。"); return; }
+  if (!force && !/^AIza[0-9A-Za-z_\-]{35}$/.test(key)) {
+    obMsg("warn", "這串文字的格式不像 Google 的 API Key（通常是 AIza 開頭、共 39 個字元，目前是 " + key.length +
+      " 個字元）。請確認有沒有複製完整。<br><button type=\"button\" class=\"ghost\" id=\"keyForce\" style=\"margin-top:8px\">確定沒錯，仍要載入</button>");
+    document.getElementById("keyForce").addEventListener("click", function () { submitKey(true); });
+    return;
+  }
+  var saved = saveKey(key, remember);
+  if (mapsRequested) {
+    // 這個頁面已經載入過 Google Maps，換 Key 必須重新整理
+    if (saved) { location.reload(); }
+    else { obMsg("error", "這個瀏覽器不允許儲存資料，無法在更換 Key 後自動重新整理。請手動重新整理頁面後再貼一次。"); }
+    return;
+  }
+  loadMaps(key);
+}
+
+// ───────── 事件 ─────────
+document.getElementById("keyForm").addEventListener("submit", function (e) { e.preventDefault(); submitKey(false); });
+document.getElementById("keyShow").addEventListener("click", function (e) {
+  var inp = document.getElementById("keyInput"), show = inp.type === "password";
+  inp.type = show ? "text" : "password"; e.target.textContent = show ? "隱藏" : "顯示";
+});
+document.getElementById("keyChange").addEventListener("click", function () {
+  document.getElementById("keyInput").value = "";
+  showOnboard();
+  obMsg("warn", "貼上新的 Key 後，頁面會重新整理並改用新的 Key。原本的 Key 在你按下載入之前不會被清除。" +
+    "<br><button type=\"button\" class=\"ghost\" id=\"keyBack\" style=\"margin-top:8px\">取消，回到地圖</button>");
+  document.getElementById("keyBack").addEventListener("click", function () {
+    document.getElementById("onboard").style.display = "none"; showKeyStatus(); obMsg("", "");
+  });
+});
+document.getElementById("keyClear").addEventListener("click", function () {
+  forgetKey();
+  location.reload();
+});
+
+document.getElementById("radius").addEventListener("input", function (e) {
+  radiusKm = parseFloat(e.target.value);
+  document.getElementById("radiusVal").textContent = radiusKm.toFixed(1);
+  WAREHOUSES.forEach(function (w) { if (w.circle) w.circle.setRadius(radiusKm * 1000); });
+  recomputeZones();
+  refreshResult();
+});
+
+document.getElementById("tpeToggle").addEventListener("change", function (e) {
+  if (taipeiPoly) taipeiPoly.setVisible(e.target.checked);
+});
+
+document.getElementById("uberToggle").addEventListener("change", function (e) {
+  uberPolys.forEach(function (p) { p.setVisible(e.target.checked); });
+});
+
+function searchAddr() {
+  var q = document.getElementById("addr").value.trim();
+  if (!q) return;
+  if (!geocoder) { showErr("請先載入地圖。"); return; }
+  showErr("");
+  geocoder.geocode({ address: q, region: "TW" }, function (res, status) {
+    if (status !== "OK" || !res.length) {
+      showErr("找不到這個地址（" + status + "）。若狀態是 REQUEST_DENIED，代表這把 Key 還沒啟用 Geocoding API。");
+      return;
+    }
+    var loc = res[0].geometry.location;
+    map.panTo(loc);
+    placeQuery(loc.lat(), loc.lng(), res[0].formatted_address);
+  });
+}
+document.getElementById("addrForm").addEventListener("submit", function (e) { e.preventDefault(); searchAddr(); });
+document.getElementById("resultClose").addEventListener("click", function () {
+  document.getElementById("resultCard").style.display = "none";
+  lastPoint = null;
+  if (queryMarker) { queryMarker.setMap(null); queryMarker = null; }
+});
+
+document.getElementById("whForm").addEventListener("submit", function (e) { e.preventDefault(); submitWarehouse(); });
+document.getElementById("whPick").addEventListener("click", function () { setPickMode(!pickMode); });
+document.getElementById("pickCancel").addEventListener("click", function () { setPickMode(false); });
+document.getElementById("whBulkAdd").addEventListener("click", bulkAdd);
+document.getElementById("whExport").addEventListener("click", function () {
+  document.getElementById("whBulkText").value = WAREHOUSES.map(function (w) {
+    return [w.name, w.lat.toFixed(6), w.lng.toFixed(6)].concat(w.addr ? [w.addr] : []).join(", ");
+  }).join("\n");
+  whMsg("info", WAREHOUSES.length ? "已填入上方文字框，可以複製給其他人貼上。" : "目前清單是空的。");
+});
+document.getElementById("whClearAll").addEventListener("click", function () {
+  WAREHOUSES.slice().forEach(unmountWarehouse);
+  WAREHOUSES.length = 0;
+  afterListChange();
+  whMsg("info", "清單已清空。");
+});
+
+// 分頁切換
+[["tabBtnWh", "tabWh"], ["tabBtnCost", "tabCost"]].forEach(function (pair, i, all) {
+  document.getElementById(pair[0]).addEventListener("click", function () {
+    all.forEach(function (p) {
+      var on = p === pair;
+      document.getElementById(p[0]).setAttribute("aria-selected", on ? "true" : "false");
+      document.getElementById(p[1]).hidden = !on;
+    });
+  });
+});
+
+// ───────── 台北市分區與成本試算 ─────────
+// 把台北市切成 150 公尺的小格。每格先判斷是否在台北市內、是否在 Uber Eats 服務範圍內（只算一次），
+// 再依到最近門市倉的直線距離分成三區：
+//   A 標準區：Uber Eats 有服務，且在服務半徑內
+//   B 延伸區：Uber Eats 有服務，但超過服務半徑
+//   C 山區：Uber Eats 不服務（以此代表人口稀少、不易配送的區域）
+var ZONES = {
+  A: { name: "標準區", color: "#16a34a", rgb: [22, 163, 74] },
+  B: { name: "延伸區", color: "#f97316", rgb: [249, 115, 22] },
+  C: { name: "山區", color: "#334155", rgb: [51, 65, 85] }
+};
+var GRID = (function () {
+  var lat0 = 24.955, lat1 = 25.215, lng0 = 121.452, lng1 = 121.670, cellKm = 0.15;
+  var kLat = 111.19, kLng = 111.19 * Math.cos(25.08 * Math.PI / 180);
+  var dLat = cellKm / kLat, dLng = cellKm / kLng;
+  var rows = Math.ceil((lat1 - lat0) / dLat), cols = Math.ceil((lng1 - lng0) / dLng);
+  var mask = new Uint8Array(rows * cols);          // 0 台北市外, 1 市內且 Uber 有服務, 2 市內但 Uber 不服務
+  for (var r = 0; r < rows; r++) {
+    var lat = lat1 - (r + 0.5) * dLat;             // 第 0 列在最北邊
+    for (var c = 0; c < cols; c++) {
+      var lng = lng0 + (c + 0.5) * dLng;
+      if (inTaipei(lat, lng)) mask[r * cols + c] = inUber(lat, lng) ? 1 : 2;
+    }
+  }
+  return { lat0: lat1 - rows * dLat, lat1: lat1, lng0: lng0, lng1: lng0 + cols * dLng, dLat: dLat, dLng: dLng,
+           rows: rows, cols: cols, mask: mask, cellArea: cellKm * cellKm, kLat: kLat, kLng: kLng,
+           zone: new Uint8Array(rows * cols), dist: new Float32Array(rows * cols) };
+})();
+var zoneOverlay = null, zoneStats = null;
+
+function recomputeZones() {
+  var g = GRID, ws = WAREHOUSES.filter(function (w) { return w.visible; });
+  var st = { A: { n: 0, sum: 0 }, B: { n: 0, sum: 0 }, C: { n: 0, sum: 0 } };
+  for (var r = 0; r < g.rows; r++) {
+    var lat = g.lat1 - (r + 0.5) * g.dLat;
+    for (var c = 0; c < g.cols; c++) {
+      var i = r * g.cols + c, m = g.mask[i];
+      if (!m) { g.zone[i] = 0; continue; }
+      var lng = g.lng0 + (c + 0.5) * g.dLng, best = Infinity;
+      for (var k = 0; k < ws.length; k++) {
+        var dy = (lat - ws[k].lat) * g.kLat, dx = (lng - ws[k].lng) * g.kLng, d = Math.sqrt(dx * dx + dy * dy);
+        if (d < best) best = d;
+      }
+      g.dist[i] = best;
+      var z = m === 2 ? "C" : (best <= radiusKm ? "A" : "B");
+      g.zone[i] = z === "A" ? 1 : z === "B" ? 2 : 3;
+      st[z].n++; if (isFinite(best)) st[z].sum += best;
+    }
+  }
+  zoneStats = ws.length ? st : null;
+  renderLegend();
+  renderCalc();
+  drawZones();
+}
+
+function renderLegend() {
+  if (!zoneStats) {
+    document.getElementById("zoneLegend").innerHTML = '<div class="zone-empty">新增門市倉後，這裡會顯示台北市各分區的面積比例。</div>';
+    return;
+  }
+  var total = zoneStats.A.n + zoneStats.B.n + zoneStats.C.n;
+  var bar = '<div class="zbar">', rows = '<div class="zlegend"><span></span><span class="head" style="text-align:left">台北市分區</span>' +
+            '<span class="head">面積</span><span class="head">佔比</span><span class="head">平均距離</span>';
+  ["A", "B", "C"].forEach(function (z) {
+    var s = zoneStats[z], area = s.n * GRID.cellArea, share = total ? s.n / total * 100 : 0;
+    if (s.n) bar += '<span style="flex:' + s.n + ";background:" + ZONES[z].color + '" title="' + ZONES[z].name + " " + share.toFixed(0) + '%"></span>';
+    rows += '<span class="sw" style="background:' + ZONES[z].color + '"></span><span>' + ZONES[z].name + "</span>" +
+            '<span class="num">' + area.toFixed(0) + ' km²</span><span class="num">' + share.toFixed(0) + '%</span>' +
+            '<span class="num">' + (s.n ? (s.sum / s.n).toFixed(1) + " km" : "–") + "</span>";
+  });
+  document.getElementById("zoneLegend").innerHTML = bar + "</div>" + rows + "</div>";
+}
+
+function num(id, fallback) {
+  var v = parseFloat(document.getElementById(id).value);
+  return isFinite(v) && v >= 0 ? v : fallback;
+}
+function pct(x) { return (x >= 0 ? "+" : "−") + fmt(Math.abs(x) * 100, 1) + "%"; }
+function fmt(n, digits) {
+  if (!isFinite(n)) return "–";
+  return n.toLocaleString("zh-TW", { minimumFractionDigits: digits || 0, maximumFractionDigits: digits || 0 });
+}
+
+function renderCalc() {
+  if (!zoneStats) {
+    document.getElementById("scenOut").innerHTML = '<tbody><tr><td class="meta" style="border:0">新增至少一個門市倉後才能試算。</td></tr></tbody>';
+    document.getElementById("zoneOut").innerHTML = "";
+    return;
+  }
+  var g = GRID;
+  var base = num("cBase", 0), incl = num("cIncl", 0), perKm = num("cPerKm", 0), speed = Math.max(num("cSpeed", 25), 1), stop = num("cStop", 0);
+  var billReturn = document.getElementById("cReturn").checked;
+  var P = {
+    A: { orders: num("oA", 0), f: Math.max(num("fA", 1), 1), batch: Math.max(num("bA", 1), 1) },
+    B: { orders: num("oB", 0), f: Math.max(num("fB", 1), 1), batch: Math.max(num("bB", 1), 1) },
+    C: { orders: num("oC", 0), f: Math.max(num("fC", 1), 1), batch: Math.max(num("bC", 1), 1) }
+  };
+  // 逐格計算再取平均，避免直接拿平均距離套級距造成的誤差
+  var acc = { A: { n: 0, cost: 0, min: 0, km: 0 }, B: { n: 0, cost: 0, min: 0, km: 0 }, C: { n: 0, cost: 0, min: 0, km: 0 } };
+  var keys = [null, "A", "B", "C"];
+  for (var i = 0; i < g.zone.length; i++) {
+    var z = keys[g.zone[i]];
+    if (!z || !isFinite(g.dist[i])) continue;
+    var p = P[z], road = g.dist[i] * p.f, billKm = billReturn ? road * 2 : road;
+    var trip = base + Math.max(0, billKm - incl) * perKm;
+    acc[z].n++; acc[z].km += road;
+    acc[z].cost += trip / p.batch;
+    acc[z].min += (road * 2 / speed * 60) / p.batch + stop;
+  }
+  var Z = {};
+  ["A", "B", "C"].forEach(function (z) {
+    var a = acc[z];
+    Z[z] = { km: a.n ? a.km / a.n : NaN, cost: a.n ? a.cost / a.n : NaN, min: a.n ? a.min / a.n : NaN, orders: a.n ? P[z].orders : 0 };
+  });
+
+  var h = "<thead><tr><th>分區</th><th>單程里程</th><th>單均成本</th><th>單均工時</th></tr></thead><tbody>";
+  ["A", "B", "C"].forEach(function (z) {
+    h += "<tr><td>" + ZONES[z].name + "</td><td>" + fmt(Z[z].km, 1) + " km</td><td>" +
+         fmt(Z[z].cost, 0) + " 元</td><td>" + fmt(Z[z].min, 0) + " 分</td></tr>";
+  });
+  document.getElementById("zoneOut").innerHTML = h + "</tbody>";
+
+  var scen = [["只開標準區", ["A"]], ["加上延伸區", ["A", "B"]], ["全台北市", ["A", "B", "C"]]];
+  var baseCost = null, baseHours = null;
+  h = "<thead><tr><th>開放範圍</th><th>單均成本</th><th>每日成本</th><th>每日工時</th></tr></thead><tbody>";
+  scen.forEach(function (s) {
+    var orders = 0, cost = 0, mins = 0;
+    s[1].forEach(function (z) {
+      if (!Z[z].orders || !isFinite(Z[z].cost)) return;
+      orders += Z[z].orders; cost += Z[z].orders * Z[z].cost; mins += Z[z].orders * Z[z].min;
+    });
+    var hours = mins / 60, dCost = "", dHours = "";
+    if (baseCost === null) { baseCost = cost; baseHours = hours; }
+    else {
+      if (baseCost > 0) dCost = '<span class="delta-up">' + pct(cost / baseCost - 1) + "</span>";
+      if (baseHours > 0) dHours = '<span class="delta-up">' + pct(hours / baseHours - 1) + "</span>";
+    }
+    h += "<tr><td>" + s[0] + '<span class="meta" style="display:block">' + fmt(orders) + " 單</span></td><td>" +
+         (orders ? fmt(cost / orders, 1) + " 元" : "–") + "</td><td>" + fmt(cost) + " 元" + dCost + "</td><td>" +
+         fmt(hours, 1) + " 小時" + dHours + "</td></tr>";
+  });
+  document.getElementById("scenOut").innerHTML = h + "</tbody>";
+}
+
+function drawZones() {
+  if (!map) return;
+  if (zoneOverlay) { zoneOverlay.setMap(null); zoneOverlay = null; }
+  if (!document.getElementById("zoneToggle").checked || !zoneStats) return;
+  var g = GRID, src = document.createElement("canvas");
+  src.width = g.cols; src.height = g.rows;
+  var ctx = src.getContext("2d"), img = ctx.createImageData(g.cols, g.rows), keys = [null, "A", "B", "C"];
+  for (var i = 0; i < g.zone.length; i++) {
+    var z = keys[g.zone[i]];
+    if (!z) continue;
+    var rgb = ZONES[z].rgb;
+    img.data[i * 4] = rgb[0]; img.data[i * 4 + 1] = rgb[1]; img.data[i * 4 + 2] = rgb[2]; img.data[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  var big = document.createElement("canvas"), scale = 4;      // 放大後輸出，避免格子邊緣被瀏覽器糊掉
+  big.width = g.cols * scale; big.height = g.rows * scale;
+  var bctx = big.getContext("2d");
+  bctx.imageSmoothingEnabled = false;
+  bctx.drawImage(src, 0, 0, big.width, big.height);
+  zoneOverlay = new google.maps.GroundOverlay(big.toDataURL("image/png"),
+    { north: g.lat1, south: g.lat0, west: g.lng0, east: g.lng1 }, { opacity: 0.55, clickable: false, map: map });
+}
+
+document.getElementById("zoneToggle").addEventListener("change", drawZones);
+["cBase", "cIncl", "cPerKm", "cSpeed", "cStop", "cReturn", "oA", "oB", "oC", "fA", "fB", "fC", "bA", "bB", "bC"].forEach(function (id) {
+  var el = document.getElementById(id);
+  el.addEventListener("input", renderCalc);
+  el.addEventListener("change", renderCalc);
+});
+
+// ───────── 啟動 ─────────
+renderList();
+recomputeZones();
+(function () {
+  var k = readKey();
+  if (k) { loadMaps(k); }          // 之前存過 Key：直接載入，失敗時會回到引導畫面
+})();
+</script>
+</body>
+</html>
