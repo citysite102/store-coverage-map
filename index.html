@@ -38,7 +38,13 @@
                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .scope-city { display: flex; align-items: center; gap: 8px; font-weight: 700; margin: 18px 0 4px; }
   .scope-city .meta { font-weight: 400; margin-left: auto; }
-  .scope-row { display: grid; grid-template-columns: 18px 1fr auto auto; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+  .scope-row { display: grid; grid-template-columns: 18px 62px 1fr auto auto; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+  .scope-row .nm .num { display: block; text-align: left; font-size: 12.5px; }
+  .scope-row select { font: inherit; font-size: 13px; padding: 4px 4px; border: 1px solid #cdd2d9; border-radius: 6px; background: #fff; color: var(--ink); min-width: 0; width: 100%; }
+  #assignText { width: 100%; font: inherit; font-size: 13px; padding: 8px 9px; border: 1px solid #cdd2d9; border-radius: 6px; resize: vertical; margin: 8px 0; }
+  #assignMsg { display: none; font-size: 13px; border-radius: 6px; padding: 8px 10px; margin-top: 8px; background: #eceef2; }
+  #assignMsg.show { display: block; }
+  #layers label.sub-opt { padding-left: 22px; font-size: 13px; color: var(--muted); }
   .scope-row .num { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
   .scope-row button { background: none; color: var(--link); padding: 0; font-size: 13px; }
   .scope-row.off .nm { color: var(--muted); }
@@ -222,8 +228,25 @@
   </div>
 
   <section class="tab" id="tabScope" role="tabpanel" aria-labelledby="tabBtnScope" hidden>
-    <p class="hint" style="margin-top:14px">勾選要一起評估的行政區。按「選里」可以只納入一部分的里，例如只看新店靠市區的那一半。分區比例、人口分布和成本試算都只計算這裡勾選的範圍。</p>
+    <p class="hint" style="margin-top:14px">勾選要一起評估的行政區，並用選單決定每一區由哪個倉配送。按「選里」可以只納入一部分的里。分區比例、人口分布和成本試算都只計算這裡勾選的範圍。</p>
     <div id="scopeBody"></div>
+
+    <h2>各區由哪個倉配送</h2>
+    <p class="hint" style="margin-top:0">每一區旁邊的選單決定該區的訂單交給誰。「自動」會把整區交給同一個倉，選的是離區內最多居民最近的那一個；也可以直接指定某個倉，或選「各地址找最近的倉」，不以行政區為單位。指定之後，距離、分區和成本都改用指定的倉計算。</p>
+    <div class="add-actions">
+      <button type="button" class="ghost" id="assignAuto">全部改回自動</button>
+      <button type="button" class="ghost" id="assignNearest">全部改成找最近的倉</button>
+    </div>
+    <details class="more">
+      <summary>貼上或匯出指定表</summary>
+      <p class="hint">一行一區，寫「區名, 倉名」。倉名要和門市倉分頁裡的名稱一致，也可以寫「自動」或「最近」。</p>
+      <textarea id="assignText" rows="5" placeholder="大安區, A 倉&#10;文山區, 自動" aria-label="各區指定表"></textarea>
+      <div class="add-actions">
+        <button type="button" id="assignImport">套用</button>
+        <button type="button" class="ghost" id="assignExport">把目前的指定填入上方</button>
+      </div>
+      <div id="assignMsg" role="status"></div>
+    </details>
   </section>
 
   <section class="tab" id="tabWh" role="tabpanel" aria-labelledby="tabBtnWh">
@@ -334,7 +357,9 @@
   </div>
 
   <div id="layers" class="float" role="group" aria-label="地圖圖層">
-    <label><input type="checkbox" id="zoneToggle" checked> 服務分區著色</label>
+    <label><input type="checkbox" id="zoneToggle" checked> 範圍著色</label>
+    <label class="sub-opt"><input type="radio" name="colorBy" value="zone" checked> 依服務分區</label>
+    <label class="sub-opt"><input type="radio" name="colorBy" value="wh"> 依負責的倉</label>
     <label><input type="checkbox" id="uberToggle"> <span class="key" style="background:#7c3aed"></span>Uber Eats 服務範圍</label>
     <label><input type="checkbox" id="tpeToggle" checked> <span class="key" style="border:2px solid #111827"></span>行政區與里界</label>
   </div>
@@ -419,11 +444,12 @@
 var WH_STORE = "coverage_warehouses";
 var DEFAULT_ORDERS = 200;      // 新增門市倉時帶入的示範單量，請使用者自行修改
 var PALETTE = ["#2563eb", "#d97706", "#059669", "#c026d3", "#dc2626", "#0891b2", "#7c2d12", "#4f46e5", "#be185d", "#4d7c0f"];
+function newId() { return "w" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }   // 門市倉的內部代號，用來記住各區指定給誰
 var WAREHOUSES = (function () {
   try {
     var raw = JSON.parse(localStorage.getItem(WH_STORE) || "[]");
     return raw.filter(function (w) { return w && isFinite(w.lat) && isFinite(w.lng); }).map(function (w) {
-      return { name: String(w.name || "門市倉"), addr: String(w.addr || ""), lat: +w.lat, lng: +w.lng,
+      return { id: String(w.id || newId()), name: String(w.name || "門市倉"), addr: String(w.addr || ""), lat: +w.lat, lng: +w.lng,
                color: w.color || PALETTE[0], visible: w.visible !== false,
                orders: isFinite(w.orders) && w.orders >= 0 ? +w.orders : DEFAULT_ORDERS };
     });
@@ -432,7 +458,7 @@ var WAREHOUSES = (function () {
 function saveWarehouses() {
   try {
     localStorage.setItem(WH_STORE, JSON.stringify(WAREHOUSES.map(function (w) {
-      return { name: w.name, addr: w.addr, lat: w.lat, lng: w.lng, color: w.color, visible: w.visible, orders: w.orders };
+      return { id: w.id, name: w.name, addr: w.addr, lat: w.lat, lng: w.lng, color: w.color, visible: w.visible, orders: w.orders };
     })));
   } catch (e) {}
 }
@@ -529,6 +555,13 @@ var scope = (function () {
   DIST.forEach(function (d) { if (d.city === "台北市") s.on[d.key] = true; });   // 預設：整個台北市
   return s;
 })();
+// 各區由哪個倉配送：沒有記錄或 "auto" 代表自動（整區交給離最多居民最近的倉），
+// "nearest" 代表不以行政區為單位、各地址找最近的倉，其餘是門市倉的內部代號。存在瀏覽器裡。
+var ASSIGN_STORE = "coverage_assign";
+var assign = (function () { try { var a = JSON.parse(localStorage.getItem(ASSIGN_STORE) || "{}"); return a && typeof a === "object" ? a : {}; } catch (e) { return {}; } })();
+function saveAssign() { try { localStorage.setItem(ASSIGN_STORE, JSON.stringify(assign)); } catch (e) {} }
+var assignIdx = [];                                  // 計算後的結果：每一區對應 zoneOwners 的第幾個倉，-1 代表各地址找最近的倉
+
 var active = new Uint8Array(VILLS.length);          // 每個里目前是否納入評估
 function applyScope() {
   VILLS.forEach(function (v) {
@@ -588,7 +621,7 @@ function unmountWarehouse(w) {
 }
 
 function addWarehouse(name, addr, lat, lng, quiet) {
-  var w = { name: name || "門市倉 " + (WAREHOUSES.length + 1), addr: addr || "",
+  var w = { id: newId(), name: name || "門市倉 " + (WAREHOUSES.length + 1), addr: addr || "",
             lat: lat, lng: lng, color: nextColor(), visible: true, orders: DEFAULT_ORDERS };
   WAREHOUSES.push(w);
   mountWarehouse(w);
@@ -723,20 +756,32 @@ function showResult(lat, lng, label) {
   document.getElementById("resultCard").style.display = "block";
   if (!rows.length) { el.textContent = "目前沒有勾選任何門市倉。"; return; }
 
-  var covered = rows.filter(function (r) { return r.d <= radiusKm; });
   var html = "";
   if (label) html += '<div class="meta">' + esc(label) + "</div>";
   var vHit = villageAt(lat, lng), inScope = !!vHit && !!active[vHit.i];
   html += '<div class="meta">' + (vHit ? DIST[vHit.d].city + DIST[vHit.d].name + vHit.name + (inScope ? "" : "（未納入評估範圍）") : "不在內建的行政區資料範圍內") + "｜" +
           (inUber(lat, lng) ? "Uber Eats 有服務" : '<span style="color:#b42318">Uber Eats 不服務</span>') + "</div>";
-  if (inScope && rows.length) {
-    var zk = !inUber(lat, lng) ? "C" : (rows[0].d <= radiusKm ? "A" : "B");
+  // 這個位置實際由誰配送：所在行政區有指定就用指定的倉，否則是最近的倉
+  var pick = rows[0], byDistrict = false;
+  if (inScope && assignIdx[vHit.d] >= 0 && zoneOwners[assignIdx[vHit.d]]) {
+    var target = zoneOwners[assignIdx[vHit.d]];
+    rows.forEach(function (r) { if (r.w === target) pick = r; });
+    byDistrict = true;
+  }
+  if (pick.d <= radiusKm) {
+    html += '<div class="verdict">' + (byDistrict ? DIST[vHit.d].name + "指定由 " : "由最近的 ") + esc(pick.w.name) + " 配送（" + pick.d.toFixed(2) + " km）</div>";
+  } else {
+    html += '<div class="verdict bad">' + (byDistrict ? DIST[vHit.d].name + "指定的 " : "最近的 ") + esc(pick.w.name) + " 距離 " + pick.d.toFixed(2) + " km，超出半徑 " + (pick.d - radiusKm).toFixed(2) + " km</div>";
+  }
+  if (byDistrict && pick !== rows[0]) html += '<div class="meta">直線距離最近的其實是 ' + esc(rows[0].w.name) + "（" + rows[0].d.toFixed(2) + " km）</div>";
+  if (inScope) {
+    var zk = !inUber(lat, lng) ? "C" : (pick.d <= radiusKm ? "A" : "B");
     html += '<div class="meta"><span class="sw" style="vertical-align:-1px;background:' + ZONES[zk].color + '"></span> ' + ZONES[zk].name + "</div>";
   }
   html += "<table>";
   rows.forEach(function (r) {
     html += "<tr><td><span class='" + (r.d <= radiusKm ? "in" : "out") + "'>" + (r.d <= radiusKm ? "●" : "○") + "</span> " +
-            esc(r.w.name) + "</td><td>" + r.d.toFixed(2) + " km</td></tr>";
+            esc(r.w.name) + (r === pick ? "（負責）" : "") + "</td><td>" + r.d.toFixed(2) + " km</td></tr>";
   });
   html += "</table>";
   el.innerHTML = html;
@@ -1106,41 +1151,70 @@ var GRID = (function () {
            owner: new Int16Array(n) };             // owner：這一格由哪個門市倉負責（最近的那個）
 })();
 
+var colorBy = "zone";                              // 地圖著色方式：zone 依服務分區，wh 依負責的倉
 var popMode = (function () { try { return localStorage.getItem("coverage_popmode") === "even" ? "even" : "uber"; } catch (e) { return "uber"; } })();
 var zoneOverlay = null, viewStats = null, zoneOwners = [];
 var BAND_MAX = 16;                                 // 距離分段統計到 16 公里，以上併入最後一段
 function popWeights() { return popMode === "even" ? GRID.wEven : GRID.wUber; }
 
-// 依門市倉、半徑與評估範圍，替每一格標上分區、距離、負責的倉，並回傳統計
+// 依門市倉、半徑、評估範圍與各區的指定，替每一格標上分區、距離、負責的倉，並回傳統計
+// 分兩步：先算每一格最近的倉，據此決定各區「自動」時交給誰；再依各區的指定算出實際負責的倉與距離。
 function computeZones(ws) {
-  var g = GRID, anyActive = false, q;
+  var g = GRID, anyActive = false, q, i, k;
   for (q = 0; q < active.length; q++) if (active[q]) { anyActive = true; break; }
+  assignIdx = DIST.map(function () { return -1; });
   if (!ws.length || !anyActive) { g.zone.fill(0); return null; }
-  var blank = function () { return { n: 0, pop: 0, psum: 0 }; };
-  var st = { A: blank(), B: blank(), C: blank(), bands: [], popTotal: 0,
-             vill: VILLS.map(function () { return { tot: 0, inA: 0, min: Infinity, max: 0 }; }),
-             dist: DIST.map(function () { return { A: 0, B: 0, C: 0 }; }) };
-  var w = popWeights(), b;
-  for (b = 0; b <= BAND_MAX; b++) st.bands.push({ pop: 0 });
+  var w = popWeights(), nW = ws.length;
+  var kmTo = function (lat, lng, wh) { var dy = (lat - wh.lat) * g.kLat, dx = (lng - wh.lng) * g.kLng; return Math.sqrt(dx * dx + dy * dy); };
+
+  // 第一步：每格最近的倉，並統計各區「最近的倉」的人口分布
+  var near = DIST.map(function () { return new Float64Array(nW); });
   for (var r = 0; r < g.rows; r++) {
     var lat = g.lat1 - (r + 0.5) * g.dLat;
     for (var c = 0; c < g.cols; c++) {
-      var i = r * g.cols + c, v = g.vill[i];
+      i = r * g.cols + c;
+      var v = g.vill[i];
       if (v < 0 || !active[v]) { g.zone[i] = 0; continue; }
       var lng = g.lng0 + (c + 0.5) * g.dLng, best = Infinity, own = -1;
-      for (var k = 0; k < ws.length; k++) {
-        var dy = (lat - ws[k].lat) * g.kLat, dx = (lng - ws[k].lng) * g.kLng, d = Math.sqrt(dx * dx + dy * dy);
-        if (d < best) { best = d; own = k; }
-      }
-      g.owner[i] = own;
-      g.dist[i] = best;
-      var z = g.mask[i] === 2 ? "C" : (best <= radiusKm ? "A" : "B"), p = w[i], vs = st.vill[v];
+      for (k = 0; k < nW; k++) { var d = kmTo(lat, lng, ws[k]); if (d < best) { best = d; own = k; } }
+      g.owner[i] = own; g.dist[i] = best;
+      near[VILLS[v].d][own] += w[i] + 1e-6;          // 加一點點，讓完全沒有人口的區也能決定
+    }
+  }
+  // 決定各區交給誰
+  var auto = DIST.map(function (dd, di) { var b = 0; for (k = 1; k < nW; k++) if (near[di][k] > near[di][b]) b = k; return b; });
+  DIST.forEach(function (dd, di) {
+    var a = assign[dd.key];
+    if (a === "nearest") { assignIdx[di] = -1; return; }
+    var idx = -1;
+    if (a && a !== "auto") for (k = 0; k < nW; k++) if (ws[k].id === a) idx = k;
+    assignIdx[di] = idx >= 0 ? idx : auto[di];       // 指定的倉不存在或沒勾選時，退回自動
+  });
+
+  // 第二步：依指定算出實際負責的倉、距離與分區，並累計統計
+  var blank = function () { return { n: 0, pop: 0, psum: 0 }; };
+  var st = { A: blank(), B: blank(), C: blank(), bands: [], popTotal: 0, auto: auto,
+             vill: VILLS.map(function () { return { tot: 0, inA: 0, min: Infinity, max: 0 }; }),
+             dist: DIST.map(function () { return { A: 0, B: 0, C: 0 }; }),
+             wh: ws.map(function () { return { pop: 0, inA: 0, psum: 0 }; }) };
+  for (var b2 = 0; b2 <= BAND_MAX; b2++) st.bands.push({ pop: 0 });
+  for (r = 0; r < g.rows; r++) {
+    lat = g.lat1 - (r + 0.5) * g.dLat;
+    for (c = 0; c < g.cols; c++) {
+      i = r * g.cols + c;
+      v = g.vill[i];
+      if (v < 0 || !active[v]) continue;
+      var di2 = VILLS[v].d, a2 = assignIdx[di2], dist = g.dist[i];
+      own = g.owner[i];
+      if (a2 >= 0 && a2 !== own) { own = a2; dist = kmTo(lat, g.lng0 + (c + 0.5) * g.dLng, ws[a2]); g.owner[i] = own; g.dist[i] = dist; }
+      var z = g.mask[i] === 2 ? "C" : (dist <= radiusKm ? "A" : "B"), p = w[i], vs = st.vill[v], whs = st.wh[own];
       g.zone[i] = z === "A" ? 1 : z === "B" ? 2 : 3;
-      st[z].n++; st[z].pop += p; st[z].psum += p * best; st.popTotal += p;
-      st.bands[Math.min(Math.floor(best), BAND_MAX)].pop += p;
-      st.dist[VILLS[v].d][z] += p;
+      st[z].n++; st[z].pop += p; st[z].psum += p * dist; st.popTotal += p;
+      st.bands[Math.min(Math.floor(dist), BAND_MAX)].pop += p;
+      st.dist[di2][z] += p;
+      whs.pop += p; whs.psum += p * dist; if (z === "A") whs.inA += p;
       vs.tot += p; if (z === "A") vs.inA += p;
-      if (p > 0) { if (best < vs.min) vs.min = best; if (best > vs.max) vs.max = best; }   // 只看有人口的格子
+      if (p > 0) { if (dist < vs.min) vs.min = dist; if (dist > vs.max) vs.max = dist; }   // 只看有人口的格子
     }
   }
   return st;
@@ -1196,11 +1270,21 @@ function renderScope() {
     h += '<div class="scope-city"><label><input type="checkbox" data-act="city" data-city="' + city + '"' + (nOn === ds.length ? " checked" : "") +
          (nOn > 0 && nOn < ds.length ? ' data-ind="1"' : "") + "> " + city + '</label><span class="meta">' + nOn + "／" + ds.length + " 區</span></div>";
     ds.forEach(function (d) {
-      var on = !!scope.on[d.key], n = distCount(d), info = fmt(d.pop) + " 人", cov = "";
-      if (on && st) { var s = st.dist[d.i], tot = s.A + s.B + s.C; cov = tot > 0 ? "標準區 " + fmt(s.A / tot * 100) + "%" : ""; }
+      var on = !!scope.on[d.key], n = distCount(d), info = fmt(d.pop / 10000, 1) + " 萬人", cov = "";
+      if (on && st) { var s = st.dist[d.i], tot = s.A + s.B + s.C; cov = tot > 0 ? "標準 " + fmt(s.A / tot * 100) + "%" : ""; }
       if (on && n < d.vills.length) info = n + "／" + d.vills.length + " 里";
+      var sel = "<span></span>";
+      if (on && zoneOwners.length) {
+        var cur = assign[d.key] || "auto", valid = cur === "auto" || cur === "nearest" || zoneOwners.some(function (x) { return x.id === cur; });
+        if (!valid) cur = "auto";
+        var autoName = st ? zoneOwners[st.auto[d.i]].name : "";
+        sel = '<select data-act="assign" data-d="' + d.i + '" aria-label="' + d.name + ' 的配送倉">' +
+              '<option value="auto"' + (cur === "auto" ? " selected" : "") + ">自動" + (autoName ? "：" + esc(autoName) : "") + "</option>" +
+              zoneOwners.map(function (x) { return '<option value="' + x.id + '"' + (cur === x.id ? " selected" : "") + ">" + esc(x.name) + "</option>"; }).join("") +
+              '<option value="nearest"' + (cur === "nearest" ? " selected" : "") + ">各地址找最近的倉</option></select>";
+      }
       h += '<div class="scope-row' + (on ? "" : " off") + '"><input type="checkbox" data-act="dist" data-d="' + d.i + '"' + (on ? " checked" : "") + ' aria-label="' + d.name + '">' +
-           '<span class="nm">' + d.name + ' <span class="num">' + info + '</span></span><span class="num">' + cov + "</span>" +
+           '<span class="nm">' + d.name + '<span class="num">' + info + "</span></span>" + sel + '<span class="num">' + cov + "</span>" +
            (on ? '<button type="button" data-act="open" data-d="' + d.i + '">' + (openDist === d.i ? "收合" : "選里") + "</button>" : "<span></span>") + "</div>";
       if (on && openDist === d.i) {
         var vs = d.vills.map(function (vi) { var v = VILLS[vi]; return { v: v, km: nearestKm(v.c[0], v.c[1]) }; });
@@ -1237,6 +1321,12 @@ function scopeChanged(fit) {
 document.getElementById("scopeBody").addEventListener("change", function (e) {
   var t = e.target, act = t.getAttribute("data-act");
   if (t.id === "presetKm") { var v = parseFloat(t.value); if (isFinite(v) && v >= 0) presetKm = v; return; }
+  if (act === "assign") {
+    var dd = DIST[+t.getAttribute("data-d")];
+    if (t.value === "auto") delete assign[dd.key]; else assign[dd.key] = t.value;
+    saveAssign(); recomputeZones(); refreshResult();
+    return;
+  }
   if (act === "city") {
     DIST.forEach(function (d) { if (d.city === t.getAttribute("data-city")) { if (t.checked) scope.on[d.key] = true; else delete scope.on[d.key]; } });
     scopeChanged(true);
@@ -1265,6 +1355,36 @@ document.getElementById("scopeBody").addEventListener("click", function (e) {
     d.vills.forEach(function (vi) { var v = VILLS[vi]; if (nearestKm(v.c[0], v.c[1]) > presetKm) scope.off[d.key][v.name] = true; });
   }
   scopeChanged(false);
+});
+
+function assignMsg(text) { var el = document.getElementById("assignMsg"); el.textContent = text || ""; el.className = text ? "show" : ""; }
+document.getElementById("assignAuto").addEventListener("click", function () { assign = {}; saveAssign(); recomputeZones(); refreshResult(); });
+document.getElementById("assignNearest").addEventListener("click", function () {
+  DIST.forEach(function (d) { assign[d.key] = "nearest"; });
+  saveAssign(); recomputeZones(); refreshResult();
+});
+document.getElementById("assignExport").addEventListener("click", function () {
+  var lines = DIST.filter(function (d) { return scope.on[d.key]; }).map(function (d) {
+    var a = assign[d.key], wh = WAREHOUSES.filter(function (x) { return x.id === a; })[0];
+    return d.name + ", " + (a === "nearest" ? "最近" : wh ? wh.name : "自動");
+  });
+  document.getElementById("assignText").value = lines.join("\n");
+  assignMsg(lines.length ? "已填入上方文字框。只列出有勾選的行政區。" : "目前沒有勾選任何行政區。");
+});
+document.getElementById("assignImport").addEventListener("click", function () {
+  var lines = document.getElementById("assignText").value.split(/\n/).map(function (s) { return s.trim(); }).filter(Boolean), ok = 0, bad = [];
+  lines.forEach(function (line) {
+    var p = line.split(/[,，\t]/).map(function (s) { return s.trim(); });
+    var d = DIST.filter(function (x) { return x.name === p[0] || x.key === p[0]; })[0], target = (p[1] || "").replace(/倉$/, "");
+    if (!d || p.length < 2) { bad.push(line); return; }
+    if (p[1] === "自動") { delete assign[d.key]; ok++; return; }
+    if (p[1] === "最近") { assign[d.key] = "nearest"; ok++; return; }
+    var wh = WAREHOUSES.filter(function (x) { return x.name === p[1] || x.name.replace(/倉$/, "") === target; })[0];
+    if (!wh) { bad.push(line); return; }
+    assign[d.key] = wh.id; ok++;
+  });
+  saveAssign(); recomputeZones(); refreshResult();
+  assignMsg("已套用 " + ok + " 區" + (bad.length ? "；" + bad.length + " 行看不懂（區名或倉名對不上）：" + bad.join("、") : "。"));
 });
 
 // 在地圖上畫出勾選的行政區外框與納入評估的里界
@@ -1318,12 +1438,20 @@ function renderPop() {
   });
   h += "<tr><td>合計</td><td>" + fmt(P) + "</td><td></td><td></td></tr></tbody></table>";
 
+  h += "<h2>各倉負責的範圍</h2><table class=\"calc\"><thead><tr><th>門市倉</th><th>負責人口</th><th>佔比</th><th>標準區內</th><th>平均距離</th></tr></thead><tbody>";
+  zoneOwners.forEach(function (x, k) {
+    var s = st.wh[k];
+    h += '<tr><td><span class="dot" style="display:inline-block;vertical-align:-1px;background:' + x.color + '"></span> ' + esc(x.name) + "</td><td>" + fmt(s.pop) + "</td><td>" + pc(s.pop, P) +
+         "</td><td>" + pc(s.inA, s.pop) + "</td><td>" + (s.pop > 0 ? fmt(s.psum / s.pop, 1) + " km" : "–") + "</td></tr>";
+  });
+  h += "</tbody></table>";
+
   if (onDist.length > 1) {
-    h += "<h2>各行政區</h2><table class=\"calc\"><thead><tr><th>行政區</th><th>人口</th><th>標準區</th><th>延伸區</th><th>山區</th></tr></thead><tbody>";
+    h += "<h2>各行政區</h2><table class=\"calc\"><thead><tr><th>行政區</th><th>配送倉</th><th>人口</th><th>標準區</th><th>延伸區</th></tr></thead><tbody>";
     onDist.forEach(function (d) {
       var s = st.dist[d.i], tot = s.A + s.B + s.C, n = distCount(d);
-      h += "<tr><td>" + d.name + (n < d.vills.length ? '<span class="meta" style="display:block;font-size:12.5px">' + n + "／" + d.vills.length + " 里</span>" : "") + "</td><td>" + fmt(tot) +
-           "</td><td>" + pc(s.A, tot) + "</td><td>" + pc(s.B, tot) + "</td><td>" + pc(s.C, tot) + "</td></tr>";
+      h += "<tr><td>" + d.name + (n < d.vills.length ? '<span class="meta" style="display:block;font-size:12.5px">' + n + "／" + d.vills.length + " 里</span>" : "") + "</td><td>" + (assignIdx[d.i] >= 0 ? esc(zoneOwners[assignIdx[d.i]].name) : "最近的倉") + "</td><td>" + fmt(tot) +
+           "</td><td>" + pc(s.A, tot) + "</td><td>" + pc(s.B, tot) + "</td></tr>";
     });
     h += "</tbody></table>";
   }
@@ -1556,11 +1684,13 @@ function drawZones() {
   var g = GRID, src = document.createElement("canvas");
   src.width = g.cols; src.height = g.rows;
   var ctx = src.getContext("2d"), img = ctx.createImageData(g.cols, g.rows), keys = [null, "A", "B", "C"];
+  var byWh = colorBy === "wh", whRgb = zoneOwners.map(function (x) { var n = parseInt(x.color.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; });
   for (var i = 0; i < g.zone.length; i++) {
     var z = keys[g.zone[i]];
     if (!z) continue;
-    var rgb = ZONES[z].rgb;
-    img.data[i * 4] = rgb[0]; img.data[i * 4 + 1] = rgb[1]; img.data[i * 4 + 2] = rgb[2]; img.data[i * 4 + 3] = 255;
+    // 依負責的倉著色時：標準區用倉的顏色，標準區以外用同色但較淡
+    var rgb = byWh ? (whRgb[g.owner[i]] || [120, 120, 120]) : ZONES[z].rgb;
+    img.data[i * 4] = rgb[0]; img.data[i * 4 + 1] = rgb[1]; img.data[i * 4 + 2] = rgb[2]; img.data[i * 4 + 3] = byWh && z !== "A" ? 105 : 255;
   }
   ctx.putImageData(img, 0, 0);
   var big = document.createElement("canvas"), scale = 2;      // 放大後輸出，避免格子邊緣被瀏覽器糊掉
@@ -1573,6 +1703,9 @@ function drawZones() {
 }
 
 document.getElementById("zoneToggle").addEventListener("change", drawZones);
+Array.prototype.forEach.call(document.querySelectorAll('input[name="colorBy"]'), function (el) {
+  el.addEventListener("change", function () { if (el.checked) { colorBy = el.value; drawZones(); } });
+});
 ["feeBase", "feeMid", "feeFar", "feeCeil", "cSpeed", "cStop", "fA", "fB", "fC", "bA", "bB", "bC", "dB", "dC"].forEach(function (id) {
   var el = document.getElementById(id), on = function () { renderCalc(); saveCost(); };
   el.addEventListener("input", on);
