@@ -45,6 +45,8 @@
   #assignMsg { display: none; font-size: 13px; border-radius: 6px; padding: 8px 10px; margin-top: 8px; background: #eceef2; }
   #assignMsg.show { display: block; }
   #layers label.sub-opt { padding-left: 22px; font-size: 13px; color: var(--muted); }
+  .scope-row.scope-head { border-top: 0; padding: 2px 0; font-size: 12.5px; color: var(--muted); }
+  .scope-row .cov { min-width: 62px; }
   .scope-row .num { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
   .scope-row button { background: none; color: var(--link); padding: 0; font-size: 13px; }
   .scope-row.off .nm { color: var(--muted); }
@@ -240,7 +242,7 @@
   </div>
 
   <section class="tab" id="tabScope" role="tabpanel" aria-labelledby="tabBtnScope" hidden>
-    <p class="hint" style="margin-top:14px">勾選要一起評估的行政區，並用選單決定每一區由哪個倉配送。按「選里」可以只納入一部分的里。分區比例、人口分布和成本試算都只計算這裡勾選的範圍。</p>
+    <p class="hint" style="margin-top:14px">勾選要一起評估的行政區，並用選單決定每一區由哪個倉配送。「標準區人口」是該區有多少比例的居民落在標準區，也就是 Uber Eats 有服務、而且離負責的倉在服務半徑內。按「選里」可以只納入一部分的里。分區比例、人口分布和成本試算都只計算這裡勾選的範圍。</p>
     <div id="scopeBody"></div>
 
     <h2>各區由哪個倉配送</h2>
@@ -1284,10 +1286,11 @@ function renderScope() {
   CITIES.forEach(function (city) {
     var ds = DIST.filter(function (d) { return d.city === city; }), nOn = ds.filter(function (d) { return scope.on[d.key]; }).length;
     h += '<div class="scope-city"><label><input type="checkbox" data-act="city" data-city="' + city + '"' + (nOn === ds.length ? " checked" : "") +
-         (nOn > 0 && nOn < ds.length ? ' data-ind="1"' : "") + "> " + city + '</label><span class="meta">' + nOn + "／" + ds.length + " 區</span></div>";
+         (nOn > 0 && nOn < ds.length ? ' data-ind="1"' : "") + "> " + city + '</label><span class="meta">' + nOn + "／" + ds.length + " 區</span></div>" +
+         (nOn && zoneOwners.length ? '<div class="scope-row scope-head"><span></span><span>行政區</span><span>配送倉</span><span title="區內有多少居民落在標準區：Uber Eats 有服務，而且離負責的倉在服務半徑內">標準區人口</span><span></span></div>' : "");
     ds.forEach(function (d) {
       var on = !!scope.on[d.key], n = distCount(d), info = fmt(d.pop / 10000, 1) + " 萬人", cov = "";
-      if (on && st) { var s = st.dist[d.i], tot = s.A + s.B + s.C; cov = tot > 0 ? "標準 " + fmt(s.A / tot * 100) + "%" : ""; }
+      if (on && st) { var s = st.dist[d.i], tot = s.A + s.B + s.C; cov = tot > 0 ? fmt(s.A / tot * 100) + "%" : ""; }
       if (on && n < d.vills.length) info = n + "／" + d.vills.length + " 里";
       var sel = "<span></span>";
       if (on && zoneOwners.length) {
@@ -1300,7 +1303,7 @@ function renderScope() {
               '<option value="nearest"' + (cur === "nearest" ? " selected" : "") + ">各地址找最近的倉</option></select>";
       }
       h += '<div class="scope-row' + (on ? "" : " off") + '"><input type="checkbox" data-act="dist" data-d="' + d.i + '"' + (on ? " checked" : "") + ' aria-label="' + d.name + '">' +
-           '<span class="nm">' + d.name + '<span class="num">' + info + "</span></span>" + sel + '<span class="num">' + cov + "</span>" +
+           '<span class="nm">' + d.name + '<span class="num">' + info + "</span></span>" + sel + '<span class="num cov" title="這一區有 ' + cov + ' 的居民落在標準區：Uber Eats 有服務，而且離負責的倉在服務半徑內">' + cov + "</span>" +
            (on ? '<button type="button" data-act="open" data-d="' + d.i + '">' + (openDist === d.i ? "收合" : "選里") + "</button>" : "<span></span>") + "</div>";
       if (on && openDist === d.i) {
         var vs = d.vills.map(function (vi) { var v = VILLS[vi]; return { v: v, km: nearestKm(v.c[0], v.c[1]) }; });
