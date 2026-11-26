@@ -124,6 +124,18 @@
   #whOrders .nm { display: flex; align-items: center; gap: 7px; font-weight: 600; }
   #whOrders .sub { font-size: 12.5px; color: var(--muted); font-weight: 400; display: block; }
   #zoneInputs td input { width: 64px; }
+  .mx-wrap { overflow-x: auto; }
+  #matrix th, #matrix td { text-align: center; padding: 5px 4px; white-space: nowrap; }
+  #matrix th:first-child, #matrix td:first-child { text-align: left; padding-left: 0; }
+  #matrix td[data-k] { cursor: pointer; border-left: 1px solid var(--line); }
+  #matrix td[data-k]:hover { background: #f1f3f6; }
+  #matrix td .cov { display: block; font-size: 12px; color: var(--muted); }
+  #matrix td.best { color: #17803d; font-weight: 700; }
+  #matrix td.cur { background: var(--ink); color: #fff; font-weight: 700; }
+  #matrix td.cur .cov { color: #cfd4da; }
+  #matrix td.cur:hover { background: var(--ink); }
+  #matrix td.cur.best { color: #86efac; }
+  #matrix th .dot { display: inline-block; vertical-align: -1px; margin-right: 3px; width: 9px; height: 9px; }
   #feeInputs td { white-space: nowrap; }
   #feeInputs td:first-child { white-space: normal; }
   #feeInputs .sub { display: block; font-size: 12.5px; color: var(--muted); }
@@ -304,6 +316,10 @@
     <h2>各倉單量</h2>
     <table class="calc" id="whOrders"></table>
     <p class="hint">每日單量填的是該倉在評估範圍內、標準區的單量。倉名下方的延伸區和山區單量是推估值，由人口比例乘上下方的「人均下單率」算出，不是實際訂單。</p>
+
+    <h2>各區交給不同倉的單均運費</h2>
+    <div class="mx-wrap"><table class="calc" id="matrix"></table></div>
+    <p class="hint" id="matrixHint">每一格是「這一區全部交給這個倉」時的單均運費，下方小字是區內有多少居民在服務半徑內。深色底是目前負責的倉，綠色是運費最低的選擇。點任何一格可以直接把該區改給那個倉。</p>
 
     <h2>配送費用</h2>
     <table class="calc" id="feeInputs">
@@ -1621,10 +1637,62 @@ function computeScenario(zones, T) {
   return res;
 }
 
+// 行政區 × 門市倉 的對照：假設某一區整區交給某個倉，以人口加權算出單均運費與半徑內的人口比例。
+// 和各倉填的單量無關，只看距離、費率與配送條件，用來比較「這一區該給誰」。
+function districtMatrix() {
+  var g = GRID, w = popWeights(), ws = zoneOwners, nW = ws.length;
+  var M = DIST.map(function () { return ws.map(function () { return { pop: 0, fee: 0, inR: 0 }; }); });
+  for (var r = 0; r < g.rows; r++) {
+    var lat = g.lat1 - (r + 0.5) * g.dLat;
+    for (var c = 0; c < g.cols; c++) {
+      var i = r * g.cols + c, v = g.vill[i], p = w[i];
+      if (v < 0 || !active[v] || !(p > 0)) continue;
+      var lng = g.lng0 + (c + 0.5) * g.dLng, row = M[VILLS[v].d], noUber = g.mask[i] === 2;
+      for (var k = 0; k < nW; k++) {
+        var dy = (lat - ws[k].lat) * g.kLat, dx = (lng - ws[k].lng) * g.kLng, d = Math.sqrt(dx * dx + dy * dy);
+        var z = noUber ? "C" : (d <= radiusKm ? "A" : "B"), cell = row[k];
+        cell.pop += p; cell.fee += p * tripFee(d * COST.zone[z].f) / COST.zone[z].batch;
+        if (d <= radiusKm) cell.inR += p;
+      }
+    }
+  }
+  return M;
+}
+function renderMatrix() {
+  var tbl = document.getElementById("matrix"), hint = document.getElementById("matrixHint");
+  if (!viewStats) { tbl.innerHTML = ""; hint.style.display = "none"; return; }
+  hint.style.display = "";
+  var M = districtMatrix(), ws = zoneOwners;
+  var h = "<thead><tr><th>行政區</th>" + ws.map(function (x) { return '<th><span class="dot" style="background:' + x.color + '"></span>' + esc(shortLabel(x.name)) + "</th>"; }).join("") + "</tr></thead><tbody>";
+  DIST.forEach(function (d) {
+    var row = M[d.i];
+    if (!scope.on[d.key] || !row.length || !(row[0].pop > 0)) return;
+    var best = 0;
+    row.forEach(function (c, k) { if (c.fee / c.pop < row[best].fee / row[best].pop) best = k; });
+    h += "<tr><td>" + d.name + "</td>";
+    row.forEach(function (c, k) {
+      var cls = (assignIdx[d.i] === k ? "cur " : "") + (k === best ? "best" : "");
+      h += '<td data-k="' + k + '" data-d="' + d.i + '" class="' + cls + '" title="把' + d.name + "交給 " + esc(ws[k].name) + '">' + fmt(c.fee / c.pop) +
+           '<span class="cov">' + fmt(c.inR / c.pop * 100) + "%</span></td>";
+    });
+    h += "</tr>";
+  });
+  tbl.innerHTML = h + "</tbody>";
+}
+document.getElementById("matrix").addEventListener("click", function (e) {
+  var td = e.target.closest ? e.target.closest("td[data-k]") : null;
+  if (!td) return;
+  var d = DIST[+td.getAttribute("data-d")], wh = zoneOwners[+td.getAttribute("data-k")];
+  if (!d || !wh) return;
+  assign[d.key] = wh.id;
+  saveAssign(); recomputeZones(); refreshResult();
+});
+
 function renderCalc() {
   var scenTbl = document.getElementById("scenOut"), bd = document.getElementById("breakdown");
   document.getElementById("bdTitle").textContent = SCENARIOS[scenIndex][0];
   readCostInputs();
+  renderMatrix();
   document.getElementById("feeExample").textContent = "試算：" + [0.8, 2.4, 5].map(function (d) {
     return d + " 公里 " + fmt(tripFee(d)) + " 元";
   }).join("、") + "。";
